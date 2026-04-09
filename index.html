@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <script>
+    const url = window.location.href;
+    if (navigator.userAgent.match(/KAKAOTALK/i)) {
+        // 카카오톡 전용 외부 브라우저 오픈 스킴
+        location.href = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(url);
+    }
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini TRPG - Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --card-bg: #1e1e1e;
+            --accent: #6c5ce7;
+            --text: #ffffff;
+            --text-dim: #b3b3b3;
+        }
+
+        body {
+            
+            font-family: 'Pretendard', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* 네비게이션 바 */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 5%;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid #333;
+        }
+
+        .logo { font-size: 1.5rem; font-weight: bold; color: var(--accent); cursor: pointer; }
+        .user-menu { display: flex; align-items: center; gap: 15px; }
+
+        /* 메인 컨텐츠 */
+        main {
+            flex: 1;
+            padding: 2rem 5%;
+        }
+
+        .hero-section {
+            margin-bottom: 3rem;
+            text-align: left;
+        }
+
+        .hero-section h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        .hero-section p { color: var(--text-dim); }
+
+        /* 시나리오 카드 그리드 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #333;
+            transition: transform 0.2s, border-color 0.2s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+        }
+
+        .card h3 { margin: 0 0 10px 0; }
+        .card p { font-size: 0.9rem; color: var(--text-dim); height: 40px; overflow: hidden; }
+        
+        .card-footer {
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+
+        /* 버튼 스타일 */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.3s;
+        }
+
+        .btn-primary { background-color: var(--accent); color: white; }
+        .btn-outline { background-color: transparent; border: 1px solid var(--accent); color: var(--accent); }
+        .btn:hover { opacity: 0.8; }
+
+        #scenario-list-empty {
+            text-align: center;
+            padding: 50px;
+            color: var(--text-dim);
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo" onclick="location.href='/'">Gemini TRPG</div>
+        <div class="user-menu" id="auth-menu">
+            <span id="user-name">불러오는 중...</span>
+            <button class="btn btn-primary" id="auth-btn">연결 중...</button>
+        </div>
+    </nav>
+
+    <main>
+        <section class="hero-section">
+            <h1>당신의 모험을 시작하세요</h1>
+            <p>AI 마스터와 함께 당신만의 시나리오를 완성하세요.</p>
+            <button class="btn btn-primary" style="margin-top: 20px;" onclick="createNewScenario()">
+                <i class="bi bi-plus-lg"></i> 새 시나리오 생성
+            </button>
+        </section>
+
+        <h2>내 시나리오 목록</h2>
+        <div class="grid" id="scenario-grid">
+            <div id="scenario-list-empty">로그인하여 시나리오를 확인하세요.</div>
+        </div>
+    </main>
+
+    <script>
+        // 페이지 로드 시 사용자 상태 확인
+        window.onload = async () => {
+            try {
+                const response = await fetch('/api/user');
+                const user = await response.json();
+                
+                const userNameElem = document.getElementById('user-name');
+                const authBtn = document.getElementById('auth-btn');
+
+                if (user && user.username) {
+                    // 1. 로그인 성공 상태
+                    userNameElem.innerText = `${user.username} 님`;
+                    authBtn.innerText = "로그아웃";
+                    authBtn.className = "btn btn-outline";
+                    authBtn.onclick = () => location.href = '/auth/logout';
+                    
+                    // 로그인 후 시나리오 목록 불러오기
+                    loadMyScenarios();
+                } else {
+                    // 2. 게스트 상태
+                    userNameElem.innerText = "게스트 님";
+                    authBtn.innerText = "Google 로그인";
+                    authBtn.className = "btn btn-primary";
+                    authBtn.onclick = () => location.href = '/auth/google';
+                }
+            } catch (err) {
+                console.error("인증 정보를 가져오는데 실패했습니다.", err);
+            }
+        };
+
+        // 내 시나리오 목록 가져오기
+        async function loadMyScenarios() {
+            const grid = document.getElementById('scenario-grid');
+            try {
+                const response = await fetch('/api/my-scenarios');
+                const scenarios = await response.json();
+
+                if (scenarios.length > 0) {
+                    grid.innerHTML = ''; // 비어있음 메시지 삭제
+                    scenarios.forEach(s => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.onclick = () => location.href = `/game/${s._id}`;
+                        card.innerHTML = `
+                            <h3>${s.title}</h3>
+                            <p>${s.worldSetting || '설명이 없습니다.'}</p>
+                            <div class="card-footer">
+                                <span>생성일: ${new Date(s.createdAt).toLocaleDateString()}</span>
+                                <span>입장하기 <i class="bi bi-arrow-right"></i></span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다.</div>';
+                }
+            } catch (err) {
+                grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
+            }
+        }
+
+// 새 시나리오 생성 함수 (이 부분만 정확히 교체하세요)
+function createNewScenario() {
+    const authBtn = document.getElementById('auth-btn');
+    
+    // 버튼 텍스트가 "Google 로그인"이면 로그인이 안 된 상태임
+    if (authBtn.innerText === "Google 로그인") {
+        alert("로그인이 필요한 서비스입니다.");
+        return;
+    }
+    
+    // 로그인 된 상태라면 /create 페이지로 이동
+    location.href = '/create'; 
+}
+    </script>
+</body>
+</html>

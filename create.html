@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>새 시나리오 만들기 - Gemini TRPG</title>
+    <style>
+        body { background: #121212; color: white; font-family: sans-serif; padding: 50px; }
+        .container { max-width: 600px; margin: 0 auto; background: #1e1e1e; padding: 30px; border-radius: 15px; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; background: #333; border: 1px solid #444; color: white; border-radius: 5px; }
+        button { width: 100%; padding: 15px; background: #6c5ce7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        label { color: #b3b3b3; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📜 새 시나리오 생성</h2>
+        <label>시나리오 제목</label>
+        <input type="text" id="title" placeholder="예: 무너진 왕국의 비밀">
+        
+        <label>세계관 설정 (AI 마스터의 지침이 됩니다)</label>
+        <textarea id="worldSetting" rows="5" placeholder="시대적 배경, 마법의 유무 등을 적어주세요..."></textarea>
+        
+        <label>나의 캐릭터 정보</label>
+        <textarea id="charInfo" rows="3" placeholder="이름, 직업, 특징 등..."></textarea>
+        
+        <button onclick="submitScenario()">모험 시작하기</button>
+    </div>
+
+    <script>
+        async function submitScenario() {
+            const data = {
+                title: document.getElementById('title').value,
+                worldSetting: document.getElementById('worldSetting').value,
+                characterInfo: document.getElementById('charInfo').value
+            };
+
+            const response = await fetch('/api/scenarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                alert("시나리오가 저장되었습니다!");
+                location.href = '/'; // 홈으로 이동
+            } else {
+                alert("저장 실패 (로그인 상태를 확인하세요)");
+            }
+        }
+    </script>
+</body>
+</html>

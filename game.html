@@ -116,9 +116,45 @@
             0%, 80%, 100% { transform: scale(0); }
             40% { transform: scale(1.0); }
         }
+        /* 로딩 애니메이션 스타일 */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #888;
+            font-style: italic;
+            margin: 10px 0;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            background: #888;
+            border-radius: 50%;
+            animation: blink 1.4s infinite both;
+        }
+
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0; }
+            40% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
+    <div style="padding: 10px; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px;">
+    <span style="font-size: 0.9rem; color: #b3b3b3;">마스터 지능:</span>
+    <select id="model-select" style="background: #2a2a2a; color: white; border: 1px solid #444; border-radius: 5px; padding: 5px;">
+        <option value="gpt-5.4-mini">gpt-5.4-mini (빠름 - 추천)</option>
+        <option value="gpt-5.4-nano">gpt-5.4-nano(더 빠름)</option>
+        <option value="gpt-5.4">GPT-5.4 (오래걸림)</option>
+
+    </select>
+    </div>
+    <button onclick="clearLogs()" style="background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem;">대화 초기화</button>
+</div>
     <div id="chat-window"></div>
 
     <div id="input-area">
@@ -126,99 +162,134 @@
         <button id="send-btn">전송</button>
     </div>
 
-        <script>
-            const scenarioId = window.location.pathname.split('/').pop();
-            const chatWindow = document.getElementById('chat-window');
-            const userInput = document.getElementById('user-input');
-            const sendBtn = document.getElementById('send-btn');
+<script>
+    const scenarioId = window.location.pathname.split('/').pop();
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
 
-            // 1. 메시지 추가 함수
-            function addMessage(sender, text) {
-                const div = document.createElement('div');
-                div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
-                div.innerText = `${sender}: ${text}`;
-                chatWindow.appendChild(div);
-                chatWindow.scrollTop = chatWindow.scrollHeight;
-            }
+    // 1. 메시지 추가 함수 (마스터와 플레이어 색상 구분)
+    function addMessage(sender, text) {
+        const div = document.createElement('div');
+        div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
+        div.innerText = `${sender}: ${text}`;
+        chatWindow.appendChild(div);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
 
-            // 2. 마스터의 스트리밍용 말풍선 생성 함수
-            function createStreamMsg() {
-                const div = document.createElement('div');
-                div.className = 'msg master';
-                div.innerText = "마스터: "; // 이름표만 달아둠
-                chatWindow.appendChild(div);
-                chatWindow.scrollTop = chatWindow.scrollHeight;
-                return div;
-            }
+    // 2. 대답 중... 로딩 애니메이션 추가 함수
+    function showLoading() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'ai-loading';
+        loadingDiv.className = 'loading';
+        loadingDiv.innerHTML = `
+            <span>마스터가 주사위를 굴리는 중</span>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        `;
+        chatWindow.appendChild(loadingDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
 
-            // 3. 메시지 전송 로직 (스트리밍)
-            async function send() {
-                const text = userInput.value.trim();
-                if (!text) return;
+    // 3. 로딩 애니메이션 제거 함수
+    function hideLoading() {
+        const loader = document.getElementById('ai-loading');
+        if (loader) loader.remove();
+    }
 
-                addMessage("플레이어", text);
-                userInput.value = '';
 
-                const masterMsgDiv = createStreamMsg();
+async function send(initialText = null) {
+    // 1. 텍스트 결정
+    const text = initialText !== null ? initialText : userInput.value.trim();
+    if (initialText === null && !text) return;
 
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ scenarioId, userMessage: text })
-                    });
+    // 2. 모델 값 가져오기 (상자가 없어도 에러 안 나게 방어막 설치)
+    const modelSelector = document.getElementById('model-select');
+    const selectedModel = modelSelector ? modelSelector.value : "gpt-5.4-mini";
 
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
+    // 브라우저 콘솔 확인용
+    console.log("📤 전송 준비 - 모델:", selectedModel, "내용:", text);
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+    if (initialText === null) {
+        addMessage("플레이어", text);
+        userInput.value = '';
+    }
 
-                        const chunk = decoder.decode(value, { stream: true });
-                        masterMsgDiv.innerText += chunk; 
-                        chatWindow.scrollTop = chatWindow.scrollHeight;
-                    }
-                } catch (err) {
-                    masterMsgDiv.innerText += " (마법의 흐름이 끊겼습니다.)";
-                }
-            }
+    showLoading();
 
-            // 4. 게임 시작 첫 인사 (스트리밍)
-            async function start() {
-                const masterMsgDiv = createStreamMsg();
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                scenarioId: scenarioId, // 명확하게 scenarioId 지정
+                userMessage: text,
+                model: selectedModel 
+            })
+        });
 
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ scenarioId }) // userMessage 없이 전송
-                    });
+        hideLoading();
 
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
+        // 3. 응답 처리
+        if (response.ok) {
+            const replyText = await response.text();
+            addMessage("마스터", replyText);
+        } else {
+            // 500 에러 등이 발생하면 여기서 잡힘
+            const errorText = await response.text();
+            console.error("❌ 서버 응답 에러:", errorText);
+            addMessage("시스템", `마스터가 혼란에 빠졌습니다. (에러: ${response.status})`);
+        }
+    } catch (err) {
+        hideLoading();
+        console.error("❌ 통신 에러:", err);
+        addMessage("시스템", "서버와 연결할 수 없습니다.");
+    }
+}
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+    // 5. 게임 시작 첫 인사
+    function start() {
+        // 서버의 userMessage 파라미터가 비어있으면 "게임 시작을 선언해줘"로 인식하도록 해둠
+        send(""); 
+    }
 
-                        const chunk = decoder.decode(value, { stream: true });
-                        masterMsgDiv.innerText += chunk; 
-                        chatWindow.scrollTop = chatWindow.scrollHeight;
-                    }
-                } catch (err) {
-                    masterMsgDiv.innerText = "마스터: 모험의 서를 펼치는 데 실패했습니다.";
-                }
-            }
+    // 6. 이벤트 리스너 (버튼 클릭 및 엔터키)
+    sendBtn.addEventListener('click', () => send());
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') send();
+    });
+    // 💡 페이지 로드 시 이전 대화 불러오기
+async function loadHistory() {
+    const response = await fetch(`/api/chat/${scenarioId}`);
+    if (response.ok) {
+        const history = await response.json();
+        history.forEach(msg => {
+            const sender = msg.role === 'user' ? '플레이어' : '마스터';
+            addMessage(sender, msg.content);
+        });
+    }
+}
 
-            // 5. 이벤트 리스너
-            sendBtn.addEventListener('click', send);
-            userInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') send();
-            });
+// 💡 대화 초기화 함수
+async function clearLogs() {
+    if (!confirm("지금까지의 모든 대화 기록을 지울까요?")) return;
+    
+    const response = await fetch(`/api/chat/${scenarioId}`, { method: 'DELETE' });
+    if (response.ok) {
+        document.getElementById('chat-box').innerHTML = ''; // 화면 지우기
+        addMessage("시스템", "대화 기록이 모두 삭제되었습니다.");
+    }
+}
 
-            // 페이지 실행 시 마스터가 먼저 말 걸기
-            start();
-        </script>
+// 기존 window.onload에 추가
+window.onload = async () => {
+    await loadScenarioInfo(); // 기존 시나리오 정보 로드
+    await loadHistory();      // 💡 추가: 이전 대화 로드
+};
+
+    // 페이지 접속 시 마스터가 먼저 말 걸기
+    start();
+</script>
 </body>
 </html>

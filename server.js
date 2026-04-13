@@ -152,10 +152,12 @@ app.post('/api/chat', async (req, res) => {
 // [추가] 시나리오의 이전 대화 로그 불러오기 API
 app.get('/api/chat/:scenarioId', async (req, res) => {
     try {
-        const messages = await Message.find({ scenarioId: req.params.scenarioId }).sort('createdAt');
-        res.json(messages);
+        // DB에서 해당 시나리오의 메시지를 생성순으로 가져옴
+        const messages = await Message.find({ scenarioId: req.params.scenarioId }).sort({ createdAt: 1 });
+        res.json(messages); // 브라우저로 데이터 전송
     } catch (err) {
-        res.status(500).send("로그를 불러오는데 실패했습니다.");
+        console.error("로그 로드 실패:", err);
+        res.status(500).send("로그 로드 실패");
     }
 });
 

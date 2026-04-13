@@ -162,69 +162,48 @@
         <button id="send-btn">전송</button>
     </div>
 
-<script>
-    const scenarioId = window.location.pathname.split('/').pop();
-    const chatWindow = document.getElementById('chat-window');
+    <script>
+    // HTML 요소 가져오기 (ID는 찬수 님의 HTML에 맞게 확인하세요)
+    const chatWindow = document.getElementById('chat-window'); 
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
+    const loadingIndicator = document.getElementById('loading'); // 로딩 애니메이션이 있다면
 
-    // 페이지 로드 시 실행될 함수
-window.onload = async () => {
-    // 1. URL 경로에서 시나리오 ID 추출 (예: /game/65f123... 에서 ID만 뽑기)
-    const pathSegments = window.location.pathname.split('/');
-    const scenarioId = pathSegments[pathSegments.length - 1];
+    // 💡 1. 핵심 전역 변수: 현재 접속한 방(시나리오)의 ID를 저장합니다.
+    let scenarioId = "";
 
-    if (!scenarioId || scenarioId === 'game') {
-        console.error("❌ 시나리오 ID를 찾을 수 없습니다.");
-        return;
-    }
+    // 💡 2. 페이지 로드 시 실행 (ID 추출 -> 정보 로드 -> 대화 로드)
+    window.onload = async () => {
+        const urlParts = window.location.pathname.split('/');
+        scenarioId = urlParts[urlParts.length - 1]; // URL 맨 끝의 ID 가져오기
 
-    console.log("📍 로드 중인 시나리오 ID:", scenarioId);
-
-    // 2. 시나리오 정보 로드 (제목 등)
-    await loadScenarioInfo(scenarioId); 
-
-    // 3. 💡 저장된 대화 로그 불러오기 핵심 로직
-    try {
-        const response = await fetch(`/api/chat/${scenarioId}`);
-        if (response.ok) {
-            const history = await response.json();
-            const chatBox = document.getElementById('chat-box');
-            
-            // 기존 화면 비우고 다시 그리기
-            chatBox.innerHTML = ''; 
-
-            history.forEach(msg => {
-                const sender = (msg.role === 'user') ? '나' : '마스터';
-                addMessage(sender, msg.content);
-            });
-            
-            chatBox.scrollTop = chatBox.scrollHeight; // 스크롤 하단 이동
-            console.log("✅ 대화 기록 복구 완료");
+        if (!scenarioId || scenarioId === 'game') {
+            console.error("❌ 시나리오 ID를 찾을 수 없습니다.");
+            return;
         }
-    } catch (err) {
-        console.error("❌ 기록 불러오기 에러:", err);
-    }
-};
 
-// 💡 DB에서 대화 내역 가져오기
-async function loadChatHistory(scenarioId) {
-    const response = await fetch(`/api/chat/${scenarioId}`);
-    if (response.ok) {
-        const history = await response.json();
-        const chatBox = document.getElementById('chat-box');
-        
-        history.forEach(msg => {
-            const sender = msg.role === 'user' ? '나' : '마스터';
-            addMessage(sender, msg.content);
-        });
-        
-        // 스크롤을 맨 아래로 이동
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-}
+        console.log("📍 현재 입장한 시나리오 ID:", scenarioId);
 
-    // 1. 메시지 추가 함수 (마스터와 플레이어 색상 구분)
+        await loadScenarioInfo(); // 세계관 정보 띄우기
+        await loadHistory();      // 📜 과거 대화 내역 불러오기
+    };
+
+    // 💡 3. 시나리오 정보 불러오기
+    async function loadScenarioInfo() {
+        try {
+            const response = await fetch('/api/my-scenarios');
+            const scenarios = await response.json();
+            const current = scenarios.find(s => s._id === scenarioId);
+            
+            if (current) {
+                document.getElementById('scenario-title').innerText = current.title;
+                document.getElementById('scenario-desc').innerText = 
+                    `세계관: ${current.worldSetting} | 캐릭터: ${current.characterInfo}`;
+            }
+        } catch (err) {
+            console.error("시나리오 정보 로드 실패", err);
+        }
+    }
     function addMessage(sender, text) {
         const div = document.createElement('div');
         div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
@@ -255,97 +234,106 @@ async function loadChatHistory(scenarioId) {
     }
 
 
-async function send(initialText = null) {
-    // 1. 텍스트 결정
-    const text = initialText !== null ? initialText : userInput.value.trim();
-    if (initialText === null && !text) return;
 
-    // 2. 모델 값 가져오기 (상자가 없어도 에러 안 나게 방어막 설치)
-    const modelSelector = document.getElementById('model-select');
-    const selectedModel = modelSelector ? modelSelector.value : "gpt-5.4-mini";
+    // 💡 5. 📜 서버(DB)에서 과거 대화 기록 가져오기
+    async function loadHistory() {
+        try {
+            const response = await fetch(`/api/chat/${scenarioId}`);
+            if (response.ok) {
+                const history = await response.json();
+                chatWindow.innerHTML = ''; // 로딩 중 텍스트 지우기
 
-    // 브라우저 콘솔 확인용
-    console.log("📤 전송 준비 - 모델:", selectedModel, "내용:", text);
-
-    if (initialText === null) {
-        addMessage("플레이어", text);
-        userInput.value = '';
-    }
-
-    showLoading();
-
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                scenarioId: scenarioId, // 명확하게 scenarioId 지정
-                userMessage: text,
-                model: selectedModel 
-            })
-        });
-
-        hideLoading();
-
-        // 3. 응답 처리
-        if (response.ok) {
-            const replyText = await response.text();
-            addMessage("마스터", replyText);
-        } else {
-            // 500 에러 등이 발생하면 여기서 잡힘
-            const errorText = await response.text();
-            console.error("❌ 서버 응답 에러:", errorText);
-            addMessage("시스템", `마스터가 혼란에 빠졌습니다. (에러: ${response.status})`);
+                // 대화 내역을 순서대로 화면에 출력
+                history.forEach(msg => {
+                    const sender = msg.role === 'user' ? '나' : '마스터';
+                    addMessage(sender, msg.content);
+                });
+                
+                // 만약 대화 기록이 하나도 없다면 자동으로 게임 시작!
+                if (history.length === 0) {
+                    start();
+                }
+            }
+        } catch (err) {
+            console.error("❌ 대화 기록 불러오기 실패:", err);
+            addMessage("시스템", "대화 기록을 불러오지 못했습니다.");
         }
-    } catch (err) {
-        hideLoading();
-        console.error("❌ 통신 에러:", err);
-        addMessage("시스템", "서버와 연결할 수 없습니다.");
     }
-}
-
-    // 5. 게임 시작 첫 인사
-    function start() {
-        // 서버의 userMessage 파라미터가 비어있으면 "게임 시작을 선언해줘"로 인식하도록 해둠
-        send(""); 
-    }
-
-    // 6. 이벤트 리스너 (버튼 클릭 및 엔터키)
-    sendBtn.addEventListener('click', () => send());
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') send();
-    });
-    // 💡 페이지 로드 시 이전 대화 불러오기
-async function loadHistory() {
-    const response = await fetch(`/api/chat/${scenarioId}`);
-    if (response.ok) {
-        const history = await response.json();
-        history.forEach(msg => {
-            const sender = msg.role === 'user' ? '플레이어' : '마스터';
-            addMessage(sender, msg.content);
-        });
-    }
-}
-
-// 💡 대화 초기화 함수
+// 🗑️ 대화 초기화 함수 수정본
 async function clearLogs() {
     if (!confirm("지금까지의 모든 대화 기록을 지울까요?")) return;
     
-    const response = await fetch(`/api/chat/${scenarioId}`, { method: 'DELETE' });
-    if (response.ok) {
-        document.getElementById('chat-box').innerHTML = ''; // 화면 지우기
-        addMessage("시스템", "대화 기록이 모두 삭제되었습니다.");
+    try {
+        const response = await fetch(`/api/chat/${scenarioId}`, { 
+            method: 'DELETE' 
+        });
+
+        // 💡 응답이 성공(200~299)인지 확인
+        if (response.ok) {
+            alert("기록이 성공적으로 초기화되었습니다.");
+            // 초기화 후 깔끔하게 첫 화면으로 이동하거나 새로고침합니다.
+            location.reload(); 
+        } else {
+            // 서버에서 에러 코드를 보냈을 때
+            const errorText = await response.text();
+            console.error("초기화 서버 응답 에러:", errorText);
+            alert("초기화 실패: 서버 응답에 문제가 있습니다.");
+        }
+    } catch (err) {
+        console.error("초기화 네트워크 에러:", err);
+        alert("초기화 실패: 네트워크 연결을 확인하세요.");
     }
 }
+    // 💡 6. 메시지 전송 및 DB 저장
+    async function send(message = null) {
+        const userText = message !== null ? message : userInput.value.trim();
+        
+        if (message === null && !userText) return; // 빈 칸이면 무시
+        
+        if (message === null) {
+            addMessage("나", userText); // 내 화면에 출력
+            userInput.value = "";       // 입력창 비우기
+        }
 
-// 기존 window.onload에 추가
-window.onload = async () => {
-    await loadScenarioInfo(); // 기존 시나리오 정보 로드
-    await loadHistory();      // 💡 추가: 이전 대화 로드
-};
+        // 로딩 표시 켜기
+        if (loadingIndicator) loadingIndicator.style.display = 'block';
 
-    // 페이지 접속 시 마스터가 먼저 말 걸기
-    start();
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    scenarioId: scenarioId, // 🌟 위에서 저장한 방 번호를 서버로 보냄! (저장 필수 조건)
+                    userMessage: userText
+                })
+            });
+
+            if (response.ok) {
+                const aiReply = await response.text();
+                addMessage("마스터", aiReply);
+            } else {
+                addMessage("시스템", `마스터가 혼란에 빠졌습니다. (에러: ${response.status})`);
+            }
+        } catch (err) {
+            console.error("❌ 통신 에러:", err);
+            addMessage("시스템", "서버와 연결할 수 없습니다.");
+        } finally {
+            // 로딩 표시 끄기
+            if (loadingIndicator) loadingIndicator.style.display = 'none';
+        }
+    }
+
+    // 💡 7. 초기 게임 시작 신호
+    function start() {
+        send("게임을 시작해줘."); 
+    }
+
+    // 💡 8. 엔터키 및 클릭 이벤트 연결
+    if (sendBtn) sendBtn.addEventListener('click', () => send());
+    if (userInput) userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') send();
+    });
+
 </script>
 </body>
 </html>

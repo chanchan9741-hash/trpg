@@ -168,6 +168,62 @@
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
 
+    // 페이지 로드 시 실행될 함수
+window.onload = async () => {
+    // 1. URL 경로에서 시나리오 ID 추출 (예: /game/65f123... 에서 ID만 뽑기)
+    const pathSegments = window.location.pathname.split('/');
+    const scenarioId = pathSegments[pathSegments.length - 1];
+
+    if (!scenarioId || scenarioId === 'game') {
+        console.error("❌ 시나리오 ID를 찾을 수 없습니다.");
+        return;
+    }
+
+    console.log("📍 로드 중인 시나리오 ID:", scenarioId);
+
+    // 2. 시나리오 정보 로드 (제목 등)
+    await loadScenarioInfo(scenarioId); 
+
+    // 3. 💡 저장된 대화 로그 불러오기 핵심 로직
+    try {
+        const response = await fetch(`/api/chat/${scenarioId}`);
+        if (response.ok) {
+            const history = await response.json();
+            const chatBox = document.getElementById('chat-box');
+            
+            // 기존 화면 비우고 다시 그리기
+            chatBox.innerHTML = ''; 
+
+            history.forEach(msg => {
+                const sender = (msg.role === 'user') ? '나' : '마스터';
+                addMessage(sender, msg.content);
+            });
+            
+            chatBox.scrollTop = chatBox.scrollHeight; // 스크롤 하단 이동
+            console.log("✅ 대화 기록 복구 완료");
+        }
+    } catch (err) {
+        console.error("❌ 기록 불러오기 에러:", err);
+    }
+};
+
+// 💡 DB에서 대화 내역 가져오기
+async function loadChatHistory(scenarioId) {
+    const response = await fetch(`/api/chat/${scenarioId}`);
+    if (response.ok) {
+        const history = await response.json();
+        const chatBox = document.getElementById('chat-box');
+        
+        history.forEach(msg => {
+            const sender = msg.role === 'user' ? '나' : '마스터';
+            addMessage(sender, msg.content);
+        });
+        
+        // 스크롤을 맨 아래로 이동
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+}
+
     // 1. 메시지 추가 함수 (마스터와 플레이어 색상 구분)
     function addMessage(sender, text) {
         const div = document.createElement('div');

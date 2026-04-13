@@ -220,32 +220,30 @@
 async function loadHistory() {
     try {
         const response = await fetch(`/api/chat/${scenarioId}`);
-        if (!response.ok) throw new Error('데이터를 가져오지 못했습니다.');
+        if (!response.ok) throw new Error('네트워크 응답 오류');
         
         const history = await response.json();
-        
-        // 🔍 [디버깅] 브라우저 콘솔(F12)에 데이터가 어떻게 들어오는지 찍어봅니다.
-        console.log("받은 채팅 내역:", history);
+        console.log("📦 서버에서 받은 원본 데이터:", history); // F12 콘솔에서 확인용
 
         const chatWindow = document.getElementById('chat-window');
-        chatWindow.innerHTML = ''; // 기존 로딩 메시지 비우기
+        chatWindow.innerHTML = ''; // 기존 내용 비우기
 
         if (history && history.length > 0) {
-            history.forEach(msg => {
-                // DB의 필드명이 'role', 'content'가 맞는지 확인하며 화면에 추가
-                // 만약 DB 필드명이 다르다면 이 부분을 수정해야 합니다.
-                const sender = msg.role === 'user' ? '나' : '마스터';
-                const text = msg.content || "내용 없음";
-                
-                addMessage(sender, text);
+            history.forEach((msg, index) => {
+                // [수정] role이 'user'가 아니면 전부 '마스터'로 처리합니다.
+                // DB에 'assistant'로 저장되어 있어도 '마스터'로 변환됩니다.
+                const isUser = msg.role === 'user' || msg.role === 'player';
+                const senderName = isUser ? '나' : '마스터';
+                const content = msg.content || "내용이 없는 메시지입니다.";
+
+                addMessage(senderName, content);
             });
-            console.log("✅ 화면에 34개 메시지 출력 완료!");
+            console.log(`✅ ${history.length}개의 메시지를 모두 화면에 그렸습니다.`);
         } else {
-            console.log("❓ 데이터는 왔는데 배열이 비어있습니다.");
-            start();
+            start(); // 기록 없으면 게임 시작
         }
     } catch (err) {
-        console.error("❌ 채팅 로드 중 프론트엔드 에러:", err);
+        console.error("❌ 대화 기록 표시 중 에러 발생:", err);
     }
 }
 
@@ -333,24 +331,16 @@ async function loadHistory() {
     if (userInput) userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') send(); });
     // 🗑️ 대화 초기화 함수 (기존 버튼과 연결됨)
 async function clearLogs() {
-    if (!confirm("지금까지의 모든 대화 기록을 지울까요?")) return;
+    if (!confirm("모든 대화와 주요 사건 기록을 지우고 처음부터 다시 시작할까요?")) return;
     
     try {
-        const response = await fetch(`/api/chat/${scenarioId}`, { 
-            method: 'DELETE' 
-        });
-
+        const response = await fetch(`/api/chat/${scenarioId}`, { method: 'DELETE' });
         if (response.ok) {
-            alert("기록이 성공적으로 초기화되었습니다.");
-            location.reload(); // 화면 새로고침하여 대화창 비우기
-        } else {
-            const errorText = await response.text();
-            console.error("초기화 실패:", errorText);
-            alert("초기화 실패: 서버 응답에 문제가 있습니다.");
+            alert("모험이 초기화되었습니다.");
+            location.reload(); // 새로고침하면 서버에서 빈 데이터를 가져옵니다.
         }
     } catch (err) {
-        console.error("네트워크 에러:", err);
-        alert("초기화 실패: 네트워크 연결을 확인하세요.");
+        console.error("초기화 에러:", err);
     }
 }
 </script>

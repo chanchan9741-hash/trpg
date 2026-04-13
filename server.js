@@ -222,11 +222,23 @@ return res.json({
 
 
 // [추가] 시나리오의 대화 로그 초기화(삭제) API
+// server.js의 삭제 API
 app.delete('/api/chat/:scenarioId', async (req, res) => {
     try {
-        await Message.deleteMany({ scenarioId: req.params.scenarioId });
-        res.send("대화 로그가 초기화되었습니다.");
+        const { scenarioId } = req.params;
+
+        // 1. 해당 시나리오의 모든 채팅 메시지 삭제
+        await Message.deleteMany({ scenarioId });
+
+        // 2. [추가] 해당 시나리오의 주요 사건 기록(questLines) 초기화
+        await Scenario.findByIdAndUpdate(scenarioId, {
+            $set: { questLines: [] } // 배열을 텅 비웁니다.
+        });
+
+        console.log(`🧹 시나리오 ${scenarioId}의 모든 기록이 초기화되었습니다.`);
+        res.send("모든 기록이 초기화되었습니다.");
     } catch (err) {
+        console.error("❌ 초기화 중 에러:", err);
         res.status(500).send("초기화 실패");
     }
 });

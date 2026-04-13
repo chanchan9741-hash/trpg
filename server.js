@@ -32,6 +32,7 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     title: String,
     worldSetting: String,
     characterInfo: String,
+    questLines: [String],
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -102,6 +103,32 @@ app.get('/api/my-scenarios', async (req, res) => {
     res.json(scenarios);
 });
 
+app.get('/api/chat/:scenarioId', async (req, res) => {
+    try {
+        const { scenarioId } = req.params;
+        console.log("🔍 요청받은 시나리오 ID:", scenarioId); // 터미널에 찍힘
+
+        const messages = await Message.find({ scenarioId }).sort({ createdAt: 1 });
+        console.log(`📦 찾은 메시지 개수: ${messages.length}개`); // 개수 확인
+
+        res.json(messages); 
+    } catch (err) {
+        console.error("❌ 로그 불러오기 실패:", err);
+        res.status(500).send("로그 실패");
+    }
+});
+
+app.get('/api/scenario/:id', async (req, res) => {
+    try {
+        const scenario = await Scenario.findById(req.params.id);
+        if (!scenario) return res.status(404).send("시나리오를 찾을 수 없습니다.");
+        res.json(scenario); // 여기서 JSON을 정확히 보내줘야 에러가 안 납니다!
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+
 app.post('/api/scenarios', async (req, res) => {
     if (!req.user) return res.status(401).send("Unauthorized");
     const newScenario = new Scenario({
@@ -121,49 +148,78 @@ app.post('/api/chat', async (req, res) => {
         const scenario = await Scenario.findById(scenarioId);
         if (!scenario) return res.status(404).send("시나리오 없음");
 
+        // [핵심] 1. DB에서 최근 대화 로그 10개를 불러와 AI에게 전달할 준비를 합니다.
+        const prevMessages = await Message.find({ scenarioId })
+            .sort({ createdAt: -1 })
+            .limit(10);
+        const history = prevMessages.reverse().map(msg => ({
+            role: msg.role,
+            content: msg.content
+        }));
+
+        // 2. 현재 유저 메시지를 DB에 저장합니다.
         await Message.create({ scenarioId, role: 'user', content: userMessage || "게임 시작" });
 
-        // 선택한 모델이 없으면 가장 밸런스 좋은 mini 사용
+        const questStatus = scenario.questLines && scenario.questLines.length > 0 
+            ? `\n[지금까지의 주요 사건들: ${scenario.questLines.join(', ')}]` 
+            : "\n[아직 발생한 주요 사건이 없습니다.]";
+
         const targetModel = model || "gpt-5.4-mini";
-        console.log(`🎲 마스터 출격: ${targetModel}`);
+        console.log ('${targetModel}');
+        
 
         const response = await openai.chat.completions.create({
             model: targetModel,
             messages: [
                 { 
-                    role: "user", 
-                    content: `[시스템: 당신은 TRPG 마스터입니다 플레이어가 말하는 대사는 주인공의 대사이고 * 로 시작하는 문장은 주인공의 행동을 나타냅니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}. 상황에 맞춰 몰입감 있게 한국어로 대답하세요.]\n\n현재 상황: ${userMessage}` 
-                }
+                    role: "system", 
+                    content: `당신은 TRPG 마스터입니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}.${questStatus}
+                    상황에 맞춰 몰입감 있게 한국어로 대답하세요. 
+                    새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가하세요.` 
+                },
+                ...history, // [기억 이식] 이전 대화들을 AI에게 전달합니다.
+                { role: "user", content: userMessage || "게임을 시작해줘." }
             ],
             max_tokens: 1000,
-            temperature: 0.8 // 마스터의 창의력을 위해 살짝 높임
+            temperature: 0.8
         });
 
-        const aiReply = response.choices[0].message.content;
-        await Message.create({ scenarioId, role: 'assistant', content: aiReply });
-        
-        res.send(aiReply);
+  // server.js의 채팅 API 응답 부분
+const aiReply = response.choices[0].message.content;
+
+// [요약: ...] 추출 및 DB 저장
+const questMatch = aiReply.match(/\[요약: (.*?)\]/);
+let updatedQuestLines = scenario.questLines; // 기본값은 기존 기록
+
+if (questMatch) {
+    const newQuest = questMatch[1];
+    const updated = await Scenario.findByIdAndUpdate(
+        scenarioId, 
+        { $push: { questLines: newQuest } },
+        { new: true }
+    );
+    updatedQuestLines = updated.questLines;
+}
+
+// 중요: 화면에 보여줄 텍스트에서 [요약: ...] 부분을 완전히 삭제합니다.
+const cleanReply = aiReply.replace(/\[요약: .*?\]/g, "").trim();
+
+// JSON으로 깔끔하게 응답
+return res.json({ 
+    reply: cleanReply, 
+    questLines: updatedQuestLines 
+});
 
     } catch (error) {
         console.error("❌ 마스터 응답 에러:", error.message);
-        res.status(500).send("마스터가 주사위를 굴리다 넘어졌습니다. 다시 시도해 주세요!");
+        if (!res.headersSent) {
+            return res.status(500).send("마스터가 주사위를 굴리다 넘어졌습니다.");
+        }
     }
 });
 // [추가] 시나리오의 이전 대화 로그 불러오기 API
 // [✅ 백엔드 수정] 
-app.get('/api/chat/:scenarioId', async (req, res) => {
-    try {
-        const { scenarioId } = req.params;
-        // DB에서 해당 시나리오의 메시지를 시간순(1)으로 정렬해서 가져옴
-        const messages = await Message.find({ scenarioId }).sort({ createdAt: 1 });
-        
-        // 💡 중요: 찾은 메시지를 JSON 형식으로 클라이언트에 보내줘야 함!
-        res.json(messages); 
-    } catch (err) {
-        console.error("❌ 로그 불러오기 실패:", err);
-        res.status(500).send("로그를 불러오는데 실패했습니다.");
-    }
-});
+
 
 // [추가] 시나리오의 대화 로그 초기화(삭제) API
 app.delete('/api/chat/:scenarioId', async (req, res) => {

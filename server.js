@@ -132,7 +132,7 @@ app.post('/api/chat', async (req, res) => {
             messages: [
                 { 
                     role: "user", 
-                    content: `[시스템: 당신은 노련한 TRPG 마스터입니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}. 상황에 맞춰 몰입감 있게 한국어로 대답하세요.]\n\n현재 상황: ${userMessage || "게임을 시작해줘."}` 
+                    content: `[시스템: 당신은 TRPG 마스터입니다 플레이어가 말하는 대사는 주인공의 대사이고 * 로 시작하는 문장은 주인공의 행동을 나타냅니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}. 상황에 맞춰 몰입감 있게 한국어로 대답하세요.]\n\n현재 상황: ${userMessage}` 
                 }
             ],
             max_tokens: 1000,
@@ -150,14 +150,18 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 // [추가] 시나리오의 이전 대화 로그 불러오기 API
+// [✅ 백엔드 수정] 
 app.get('/api/chat/:scenarioId', async (req, res) => {
     try {
-        // DB에서 해당 시나리오의 메시지를 생성순으로 가져옴
-        const messages = await Message.find({ scenarioId: req.params.scenarioId }).sort({ createdAt: 1 });
-        res.json(messages); // 브라우저로 데이터 전송
+        const { scenarioId } = req.params;
+        // DB에서 해당 시나리오의 메시지를 시간순(1)으로 정렬해서 가져옴
+        const messages = await Message.find({ scenarioId }).sort({ createdAt: 1 });
+        
+        // 💡 중요: 찾은 메시지를 JSON 형식으로 클라이언트에 보내줘야 함!
+        res.json(messages); 
     } catch (err) {
-        console.error("로그 로드 실패:", err);
-        res.status(500).send("로그 로드 실패");
+        console.error("❌ 로그 불러오기 실패:", err);
+        res.status(500).send("로그를 불러오는데 실패했습니다.");
     }
 });
 

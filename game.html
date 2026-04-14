@@ -22,7 +22,15 @@
             margin: 0; 
             font-family: 'Pretendard', sans-serif;
         }
-
+        #chat-window img {
+            max-width: 300px; /* 원하는 가로 크기로 조절 (예: 300px) */
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            margin: 10px 0;
+            display: block;
+            border: 2px solid var(--accent); /* 테두리 효과 (선택사항) */
+        }
         /* 채팅창 영역 */
         #chat-window { 
             flex: 1; 
@@ -145,34 +153,35 @@
 </head>
 <body>
     
-    <div style="padding: 10px; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px;">
-    <span style="font-size: 0.9rem; color: #b3b3b3;">마스터 지능:</span>
-    <select id="model-select" style="background: #2a2a2a; color: white; border: 1px solid #444; border-radius: 5px; padding: 5px;">
-        <option value="gpt-5.4-mini">gpt-5.4-mini (빠름 - 추천)</option>
-        <option value="gpt-5.4-nano">gpt-5.4-nano(더 빠름)</option>
-        <option value="gpt-5.4">GPT-5.4 (오래걸림)</option>
-
-    </select>
+<header style="display: flex; justify-content: space-between; align-items: center; padding: 10px 5%; background: #1e1e1e; border-bottom: 1px solid #333;">
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <div onclick="location.href='/'" style="font-weight: bold; color: #6c5ce7; cursor: pointer;">Gemini TRPG</div>
+        <select id="model-select" style="background: #2a2a2a; color: white; border: 1px solid #444; border-radius: 5px; padding: 3px;">
+            <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+            <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+            <option value="gpt-5.4">GPT-5.4</option>
+        </select>
     </div>
     <button onclick="clearLogs()" style="background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem;">대화 초기화</button>
-</div>
+</header>
 
 
 <div id="game-container" style="display: flex; height: 90vh;">
     <div id="chat-section" style="flex: 3; display: flex; flex-direction: column; border-right: 1px solid #444;">
         <div id="chat-window" style="flex: 1; overflow-y: auto; padding: 20px;">
             </div>
-        <div id="input-area">
-            <input type="text" id="user-input" placeholder="행동을 입력하세요...">
-            <button id="send-btn">전송</button>
+        <div id="input-area" style="display: flex; gap: 10px; padding: 15px 5%; background: #1e1e1e; border-top: 1px solid #333; align-items: center;">
+            <input type="text" id="user-input" placeholder="행동을 입력하세요..." style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: white; outline: none;">
+            
+            <button id="send-btn" style="background: #6c5ce7; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;">전송</button>
+
+            <button onclick="toggleStatusModal()" style="background: #444; color: white; border: none; padding: 12px 15px; border-radius: 8px; cursor: pointer; white-space: nowrap;">기록</button>
+            <button onclick="toggleInventoryModal()" style="background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 8px; cursor: pointer; white-space: nowrap;">가방</button>
+            <button onclick="generateImage()" style="background: #e67e22; color: white; border: none; padding: 12px 15px; border-radius: 8px; cursor: pointer; white-space: nowrap;">그림</button>
         </div>
-    </div>
 
 
-</div>
-    <button onclick="toggleStatusModal()" style="position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #444; color: white; border: none; border-radius: 5px; cursor: pointer; z-index: 1000;">
-    📜 모험 기록 확인
-</button>
+
 
 <div id="statusModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000;">
     <div style="position: relative; width: 80%; max-width: 600px; margin: 50px auto; background: #222; color: #eee; padding: 20px; border-radius: 10px; border: 1px solid #555; max-height: 80vh; overflow-y: auto;">
@@ -191,9 +200,17 @@
             <div id="quest-list-modal"></div>
         </div>
 
+
         <button onclick="toggleStatusModal()" style="display: block; width: 100%; margin-top: 30px; padding: 10px; background: #555; color: white; border: none; border-radius: 5px; cursor: pointer;">닫기</button>
     </div>
 </div>
+<div id="inventoryModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2001;">
+    <div style="position: relative; width: 80%; max-width: 400px; margin: 100px auto; background: #222; color: #eee; padding: 20px; border-radius: 10px; border: 1px solid #27ae60;">
+        <span onclick="toggleInventoryModal()" style="position: absolute; top: 10px; right: 20px; font-size: 30px; cursor: pointer;">&times;</span>
+        <h2 style="text-align: center; color: #2ecc71;">🎒 가방</h2>
+        <ul id="inventory-list-modal" style="line-height: 2; font-size: 1.1rem; list-style: none; padding: 0;"></ul>
+        <button onclick="toggleInventoryModal()" style="display: block; width: 100%; margin-top: 20px; padding: 10px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">닫기</button>
+    </div>
 
  <script>
     const chatWindow = document.getElementById('chat-window'); 
@@ -273,6 +290,7 @@ async function loadScenarioInfo() {
             // [수정/추가] 서버에서 받아온 데이터를 전역 변수에 저장
             currentEvents = data.questLines || [];
             currentQuests = data.quests || {}; // 병렬 퀘스트
+            currentInventory = data.inventory || [];
             
             const titleEl = document.getElementById('scenario-title');
             if(titleEl) titleEl.innerText = data.title;
@@ -284,38 +302,51 @@ async function loadScenarioInfo() {
         }
     }
 
-    function addMessage(sender, text) {
-        const div = document.createElement('div');
-        div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
-        div.innerText = `${sender}: ${text}`;
-        chatWindow.appendChild(div);
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
+function addMessage(sender, text, isImage = false) {
+    const chatWindow = document.getElementById('chat-window');
+    if (!chatWindow) return;
 
+    const div = document.createElement('div');
+    div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
+    
+    // http로 시작하거나 isImage가 true면 이미지로 처리
+    if (isImage || (typeof text === 'string' && text.startsWith('http'))) {
+        // 이미 img 태그가 포함되어 올 경우 주소만 추출하거나, 주소면 그대로 사용
+        const imgSrc = text.includes('<img') ? text.match(/src=["']([^"']+)["']/)[1] : text;
+        div.innerHTML = `<strong>${sender}</strong>: <br><img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer;">`;
+    } else {
+        div.innerText = `${sender}: ${text}`;
+    }
+    
+    chatWindow.appendChild(div);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
 async function loadHistory() {
     try {
         const response = await fetch(`/api/chat/${scenarioId}`);
         if (!response.ok) throw new Error('네트워크 응답 오류');
         
         const history = await response.json();
-        console.log("📦 서버에서 받은 원본 데이터:", history); // F12 콘솔에서 확인용
+        console.log("📦 서버에서 받은 원본 데이터:", history);
 
         const chatWindow = document.getElementById('chat-window');
-        chatWindow.innerHTML = ''; // 기존 내용 비우기
+        chatWindow.innerHTML = ''; 
 
         if (history && history.length > 0) {
-            history.forEach((msg, index) => {
-                // [수정] role이 'user'가 아니면 전부 '마스터'로 처리합니다.
-                // DB에 'assistant'로 저장되어 있어도 '마스터'로 변환됩니다.
+            history.forEach((msg) => {
                 const isUser = msg.role === 'user' || msg.role === 'player';
                 const senderName = isUser ? '나' : '마스터';
                 const content = msg.content || "내용이 없는 메시지입니다.";
 
-                addMessage(senderName, content);
+                // [추가] 내용이 "http"로 시작하면 이미지로 간주합니다.
+                const isImg = content.startsWith('http'); 
+
+                // addMessage를 호출할 때 이미지 여부(isImg)를 함께 보냅니다.
+                addMessage(senderName, content, isImg);
             });
             console.log(`✅ ${history.length}개의 메시지를 모두 화면에 그렸습니다.`);
         } else {
-            start(); // 기록 없으면 게임 시작
+            start(); 
         }
     } catch (err) {
         console.error("❌ 대화 기록 표시 중 에러 발생:", err);
@@ -354,6 +385,7 @@ async function loadHistory() {
                 addMessage("마스터", data.reply);
                 currentEvents = data.questLines || [];
                 currentQuests = data.quests || {};
+                currentInventory = data.inventory || [];
                 
                 // 퀘스트 라인 실시간 업데이트
                 if (data.questLines) {
@@ -420,6 +452,70 @@ async function clearLogs() {
         console.error("초기화 에러:", err);
     }
 }
+let currentInventory = [];
+
+function toggleInventoryModal() {
+    const modal = document.getElementById('inventoryModal');
+    if (modal.style.display === 'none' || modal.style.display === '') {
+        const list = document.getElementById('inventory-list-modal');
+        list.innerHTML = currentInventory.length > 0 
+            ? currentInventory.map(item => `<li>⚔️ ${item}</li>`).join('') 
+            : "<li style='color:#666'>비어 있음</li>";
+        modal.style.display = 'block';
+    } else {
+        modal.style.display = 'none';
+    }
+}
+async function generateImage() {
+    if (!currentEvents || currentEvents.length === 0) {
+        alert("아직 요약된 주요 사건이 없어 그림을 그릴 수 없습니다!");
+        return;
+    }
+
+    showLoading(); 
+    try {
+        const response = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenarioId })
+        });
+
+        if (response.ok) {
+            // [수정] 순서 변경: json()을 먼저 기다려야 합니다.
+            const data = await response.json(); 
+            // [수정] 서버에서 보내주는 변수명이 'url'인지 'imageUrl'인지 확인 후 맞춰줍니다.
+            const imageUrl = data.url || data.imageUrl; 
+
+            hideLoading();
+            
+            if (!imageUrl) throw new Error("URL 없음");
+
+            // 화면에 표시 (세 번째 인자 true 전달)
+            addMessage("마스터", imageUrl, true);
+
+            // DB에 저장
+            await fetch('/api/chat/save-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scenarioId: scenarioId,
+                    role: 'assistant',
+                    content: imageUrl // 이미지 URL 저장
+                })
+            });
+        } else {
+            throw new Error("서버 응답 오류");
+        }
+    } catch (err) {
+        hideLoading();
+        console.error("❌ 상세 에러:", err);
+        alert("이미지 생성 중 에러가 발생했습니다. 터미널의 '응답 전문'을 확인하세요.");
+    }
+}
+
+
+// fetch 응답 받는 곳(data)에 아래 한 줄 추가 필수!
+// currentInventory = data.inventory || [];
 </script>
 </body>
 </html>

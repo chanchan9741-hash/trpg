@@ -34,6 +34,8 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     characterInfo: String,
     questLines: [String],
     quests: { type: Map, of: String, default: {} },
+    inventory: { type: [String], default: [] }, // 아이템 리스트 추가
+    createdAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -149,100 +151,143 @@ app.post('/api/chat', async (req, res) => {
         const scenario = await Scenario.findById(scenarioId);
         if (!scenario) return res.status(404).send("시나리오 없음");
 
-        // [핵심] 1. DB에서 최근 대화 로그 10개를 불러와 AI에게 전달할 준비를 합니다.
+        // 1. 현재까지의 메시지 개수 확인
+        const messageCount = await Message.countDocuments({ scenarioId });
+        const isFirstMessage = (messageCount === 0);
+        const isRefreshTurn = (messageCount > 0 && (messageCount % 10 === 0 || messageCount % 10 === 1));
+
+        // 2. 최근 대화 로그 불러오기 (최근 10개)
         const prevMessages = await Message.find({ scenarioId })
             .sort({ createdAt: -1 })
-            .limit(10);
+            .limit(5);
         const history = prevMessages.reverse().map(msg => ({
             role: msg.role,
             content: msg.content
         }));
 
-        // 2. 현재 유저 메시지를 DB에 저장합니다.
-        await Message.create({ scenarioId, role: 'user', content: userMessage || "게임 시작" });
+        // 3. 상황 요약본(Snapshot) 만들기 - 세계관, 퀘스트, 인벤토리 합치기
+        let currentQuests = scenario.quests.size > 0 
+            ? Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ') 
+            : "없음";
+        
+        const statusSnapshot = `
+            [현재 상황 요약]
+            - 세계관: ${scenario.worldSetting}
+            - 캐릭터: ${scenario.characterInfo}
+            - 주요 사건: ${scenario.questLines.join(' -> ') || '없음'}
+            - 진행중인 퀘스트: ${currentQuests}
+            - 보유 아이템: ${scenario.inventory.join(', ') || '없음'}`;
 
-        let currentQuests = "";
-        if (scenario.quests && scenario.quests.size > 0) {
-            currentQuests = "\n[현재 진행 중인 퀘스트]: " + Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ');
+        // 4. 시스템 지시문 (매우 짧게 유지하여 크레딧 절약)
+        const systemMessage = { 
+            role: "system", 
+            content: `"당신은 TRPG 마스터입니다.  몰입감 있게 한국어로 대답하세요. 새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가.퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가-퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.-퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가.-새로운 아이템을 획득하면 답변 끝에 [아이템: 아이템명]을 추가.`
+        };
+
+        // 5. AI에게 보낼 메시지 조립
+        let finalMessages = [systemMessage];
+
+        if (isFirstMessage) {
+            // [첫 시작] 시나리오 내용을 유저 메시지처럼 위장해서 던짐 -> 웅장한 오프닝 유도
+            finalMessages.push({ 
+                role: "user", 
+                content: `[모험 시작] 아래 설정을 바탕으로 오프닝 서술을 시작해줘. \n${statusSnapshot}` 
+            });
+            console.log("🎬 [시스템] 시나리오 기반 오프닝을 시작합니다.");
+        } else {
+            // [평소] 10번마다 한 번씩 대화 로그 맨 앞에 상황 요약본 주입
+            if (isRefreshTurn) {
+                finalMessages.push({ role: "user", content: `(마스터, 상황 복습: ${statusSnapshot})` });
+                console.log("📝 [시스템] 10턴 주기가 되어 기억을 새로고침합니다.");
+            }
+            // 기존 대화 기록 합치기
+            finalMessages = finalMessages.concat(history);
+            // 현재 유저가 입력한 메시지 추가
+            finalMessages.push({ role: "user", content: userMessage || "계임을 계속해줘." });
         }
-        
-        const questStatus = (scenario.questLines && scenario.questLines.length > 0 
-            ? `\n[주요 사건 기록: ${scenario.questLines.join(' -> ')}]` 
-            : "\n[기록된 주요 사건 없음]") + currentQuests;
-        const targetModel = model || "gpt-5.4-mini";
-        console.log(`사용 중인 모델: ${targetModel}`);
-        
 
+
+        // 6. AI 호출
+        const targetModel = model || "gpt-5.4-mini";
         const response = await openai.chat.completions.create({
             model: targetModel,
-            messages: [
-                { 
-                    role: "system", 
-                    content: `당신은 TRPG 마스터입니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}.${questStatus}
-                    상황에 맞춰 몰입감 있게 한국어로 대답하세요. 
-                    새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가하세요.
-                    퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가하세요.
-                    - 퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.
-                    - 퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가하세요.` 
-                },
-                ...history, // [기억 이식] 이전 대화들을 AI에게 전달합니다.
-                { role: "user", content: userMessage || "게임을 시작해줘." }
-            ],
+            messages: finalMessages,
             max_tokens: 1000,
             temperature: 0.8
         });
 
-  // server.js의 채팅 API 응답 부분
+        // 7. 토큰 및 크레딧 로그 출력
+        const usage = response.usage;
+        console.log("-----------------------------------------");
+        console.log(`📊 사용 모델: ${targetModel} (총 메시지 수: ${messageCount})`);
+        console.log(`- Prompt: ${usage.prompt_tokens} / Completion: ${usage.completion_tokens}`);
+        console.log(`- Total: ${usage.total_tokens}`);
+        if (usage.total_credits) console.log(`- 소모 크레딧: ${usage.total_credits} CR`);
+        console.log("-----------------------------------------");
+
         const aiReply = response.choices[0].message.content;
-        
-        // 1. AI 답변 원본 로그 저장
+
+        // 8. DB 저장 (유저 메시지와 AI 응답 저장)
+        if (!isFirstMessage) {
+            await Message.create({ scenarioId, role: 'user', content: userMessage });
+        }
         await Message.create({ scenarioId, role: 'assistant', content: aiReply });
 
-        // 2. 병렬 퀘스트 및 주요 사건 추출
+        // 9. 데이터 추출 (퀘스트, 아이템, 요약 등)
         const questMatches = aiReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g);
         const eventMatch = aiReply.match(/\[요약: (.*?)\]/);
         const completedMatches = aiReply.matchAll(/\[완료: (.*?)\]/g);
-        
+        const itemMatch = aiReply.match(/\[아이템: (.*?)\]/);
+
         let isUpdated = false;
+        if (itemMatch) {
+            const newItem = itemMatch[1].trim();
+            if (!scenario.inventory.includes(newItem)) {
+                scenario.inventory.push(newItem);
+                isUpdated = true;
+            }
+        }
         for (const match of questMatches) {
-            scenario.quests.set(match[1].trim(), match[2].trim()); // Map에 저장
+            scenario.quests.set(match[1].trim(), match[2].trim());
             isUpdated = true;
         }
         for (const match of completedMatches) {
-    const qName = match[1].trim();
-    if (scenario.quests.has(qName)) {
-        const currentContent = scenario.quests.get(qName);
-        // 이미 완료된 게 아니라면 앞에 체크 표시 추가
-        if (!currentContent.startsWith('✅')) {
-            scenario.quests.set(qName, `✅ 완료됨: ${currentContent}`);
-            isUpdated = true;
+            const qName = match[1].trim();
+            if (scenario.quests.has(qName)) {
+                const currentContent = scenario.quests.get(qName);
+                if (!currentContent.startsWith('✅')) {
+                    scenario.quests.set(qName, `✅ 완료됨: ${currentContent}`);
+                    isUpdated = true;
+                }
+            }
         }
-    }
-}
         if (eventMatch) {
-            scenario.questLines.push(eventMatch[1].trim()); // 배열에 추가
+            scenario.questLines.push(eventMatch[1].trim());
             isUpdated = true;
         }
 
         if (isUpdated) {
-            scenario.markModified('quests'); // 맵 변경 감지용
-            await scenario.save();
+        await Scenario.findByIdAndUpdate(scenarioId, {
+        $set: { 
+            quests: scenario.quests, 
+            inventory: scenario.inventory,
+            questLines: scenario.questLines 
+        }
+    });
         }
 
-        // 3. 태그 제거 및 최종 응답
-        const cleanReply = aiReply.replace(/\[요약: .*?\]/g, "").replace(/\[퀘스트: .*?\]/g, "").trim();
-
+        // 10. 클라이언트에 응답 (태그 제거)
+        const cleanReply = aiReply.replace(/\[.*?\]/g, "").trim();
         return res.json({ 
             reply: cleanReply, 
             questLines: scenario.questLines,
-            quests: Object.fromEntries(scenario.quests) 
+            quests: Object.fromEntries(scenario.quests),
+            inventory: scenario.inventory
         });
 
     } catch (error) {
-        console.error("❌ 마스터 응답 에러:", error.message);
-        if (!res.headersSent) {
-            return res.status(500).send("마스터가 주사위를 굴리다 넘어졌습니다.");
-        }
+        console.error("❌ 에러 발생:", error.message);
+        if (!res.headersSent) res.status(500).send("서버 에러");
     }
 });
 // [추가] 시나리오의 이전 대화 로그 불러오기 API
@@ -272,6 +317,92 @@ app.delete('/api/scenarios/:id', async (req, res) => {
         res.status(500).send("삭제 실패: " + error.message);
     }
 });
+app.delete('/api/chat/:scenarioId', async (req, res) => {
+    try {
+        const { scenarioId } = req.params;
+        await Message.deleteMany({ scenarioId }); // 메시지만 삭제
+        await Scenario.findByIdAndUpdate(scenarioId, {
+            $set: { questLines: [], quests: {} , inventory: []} // 퀘스트 기록도 초기화
+        });
+        res.send("초기화 완료");
+    } catch (err) { res.status(500).send(err.message); }
+});
+
+app.post('/api/generate-image', async (req, res) => {
+    try {
+        const { scenarioId } = req.body;
+        const scenario = await Scenario.findById(scenarioId);
+        if (!scenario) return res.status(404).send("시나리오 없음");
+
+        // ✅ 1. 진짜 팩트챗 클라우드 주소
+        const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
+        const apiKey = process.env.OPENAI_API_KEY;
+
+        // ✅ 2. [풍부한 프롬프트 조립]
+        // 세계관 배경 정보(worldSetting)와 지금까지의 주요 사건들(questLines)을 합칩니다.
+        const worldContext = scenario.worldSetting; 
+        const recentEvents = scenario.questLines.length > 0 
+            ? scenario.questLines.slice(-3).join('. ') // 최근 3개 사건만 가져와서 문맥 연결
+            : "모험이 막 시작된 상황";
+
+        // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
+        const richPrompt = `배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 한 장의 웅장한 TRPG 삽화를 그려줘.`;
+
+        console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
+
+        // ✅ 3. 학교 API 규격에 맞춰 전송
+        const response = await fetch(SCH_GATEWAY_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "model": "gemini-2.5-flash-image",
+                "prompt": richPrompt, // 👈 배경과 사건이 합쳐진 풍부한 묘사문
+                "response_format": "url"
+            })
+        });
+
+        const responseText = await response.text();
+        if (!response.ok) {
+            return res.status(response.status).send(responseText);
+        }
+
+        const data = JSON.parse(responseText);
+        const imageUrl = (data.data && data.data[0] && data.data[0].url) || data.url;
+
+        if (imageUrl) {
+            console.log("✅ 이미지 생성 완료!");
+            res.json({ imageUrl: imageUrl });
+        } else {
+            throw new Error("이미지 URL 추출 실패");
+        }
+
+    } catch (error) {
+        console.error("❌ 이미지 생성 실패:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/chat/save-image', async (req, res) => {
+    if (!req.user) return res.status(401).send("로그인 필요");
+    const { scenarioId, role, content } = req.body;
+    
+    try {
+        await Message.create({
+            scenarioId,
+            role,
+            content // 이미지 URL 또는 <img> 태그
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error("이미지 저장 실패:", err);
+        res.status(500).send("저장 오류");
+    }
+});
+
+
 
 
 // 9. 서버 실행

@@ -33,6 +33,7 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     worldSetting: String,
     characterInfo: String,
     questLines: [String],
+    quests: { type: Map, of: String, default: {} },
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -160,12 +161,16 @@ app.post('/api/chat', async (req, res) => {
         // 2. 현재 유저 메시지를 DB에 저장합니다.
         await Message.create({ scenarioId, role: 'user', content: userMessage || "게임 시작" });
 
-        const questStatus = scenario.questLines && scenario.questLines.length > 0 
-            ? `\n[지금까지의 주요 사건들: ${scenario.questLines.join(', ')}]` 
-            : "\n[아직 발생한 주요 사건이 없습니다.]";
-
+        let currentQuests = "";
+        if (scenario.quests && scenario.quests.size > 0) {
+            currentQuests = "\n[현재 진행 중인 퀘스트]: " + Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ');
+        }
+        
+        const questStatus = (scenario.questLines && scenario.questLines.length > 0 
+            ? `\n[주요 사건 기록: ${scenario.questLines.join(' -> ')}]` 
+            : "\n[기록된 주요 사건 없음]") + currentQuests;
         const targetModel = model || "gpt-5.4-mini";
-        console.log ('${targetModel}');
+        console.log(`사용 중인 모델: ${targetModel}`);
         
 
         const response = await openai.chat.completions.create({
@@ -175,7 +180,10 @@ app.post('/api/chat', async (req, res) => {
                     role: "system", 
                     content: `당신은 TRPG 마스터입니다. 세계관: ${scenario.worldSetting}, 캐릭터: ${scenario.characterInfo}.${questStatus}
                     상황에 맞춰 몰입감 있게 한국어로 대답하세요. 
-                    새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가하세요.` 
+                    새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가하세요.
+                    퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가하세요.
+                    - 퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.
+                    - 퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가하세요.` 
                 },
                 ...history, // [기억 이식] 이전 대화들을 AI에게 전달합니다.
                 { role: "user", content: userMessage || "게임을 시작해줘." }
@@ -185,30 +193,50 @@ app.post('/api/chat', async (req, res) => {
         });
 
   // server.js의 채팅 API 응답 부분
-const aiReply = response.choices[0].message.content;
+        const aiReply = response.choices[0].message.content;
+        
+        // 1. AI 답변 원본 로그 저장
+        await Message.create({ scenarioId, role: 'assistant', content: aiReply });
 
-// [요약: ...] 추출 및 DB 저장
-const questMatch = aiReply.match(/\[요약: (.*?)\]/);
-let updatedQuestLines = scenario.questLines; // 기본값은 기존 기록
-
-if (questMatch) {
-    const newQuest = questMatch[1];
-    const updated = await Scenario.findByIdAndUpdate(
-        scenarioId, 
-        { $push: { questLines: newQuest } },
-        { new: true }
-    );
-    updatedQuestLines = updated.questLines;
+        // 2. 병렬 퀘스트 및 주요 사건 추출
+        const questMatches = aiReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g);
+        const eventMatch = aiReply.match(/\[요약: (.*?)\]/);
+        const completedMatches = aiReply.matchAll(/\[완료: (.*?)\]/g);
+        
+        let isUpdated = false;
+        for (const match of questMatches) {
+            scenario.quests.set(match[1].trim(), match[2].trim()); // Map에 저장
+            isUpdated = true;
+        }
+        for (const match of completedMatches) {
+    const qName = match[1].trim();
+    if (scenario.quests.has(qName)) {
+        const currentContent = scenario.quests.get(qName);
+        // 이미 완료된 게 아니라면 앞에 체크 표시 추가
+        if (!currentContent.startsWith('✅')) {
+            scenario.quests.set(qName, `✅ 완료됨: ${currentContent}`);
+            isUpdated = true;
+        }
+    }
 }
+        if (eventMatch) {
+            scenario.questLines.push(eventMatch[1].trim()); // 배열에 추가
+            isUpdated = true;
+        }
 
-// 중요: 화면에 보여줄 텍스트에서 [요약: ...] 부분을 완전히 삭제합니다.
-const cleanReply = aiReply.replace(/\[요약: .*?\]/g, "").trim();
+        if (isUpdated) {
+            scenario.markModified('quests'); // 맵 변경 감지용
+            await scenario.save();
+        }
 
-// JSON으로 깔끔하게 응답
-return res.json({ 
-    reply: cleanReply, 
-    questLines: updatedQuestLines 
-});
+        // 3. 태그 제거 및 최종 응답
+        const cleanReply = aiReply.replace(/\[요약: .*?\]/g, "").replace(/\[퀘스트: .*?\]/g, "").trim();
+
+        return res.json({ 
+            reply: cleanReply, 
+            questLines: scenario.questLines,
+            quests: Object.fromEntries(scenario.quests) 
+        });
 
     } catch (error) {
         console.error("❌ 마스터 응답 에러:", error.message);
@@ -223,25 +251,28 @@ return res.json({
 
 // [추가] 시나리오의 대화 로그 초기화(삭제) API
 // server.js의 삭제 API
-app.delete('/api/chat/:scenarioId', async (req, res) => {
+app.delete('/api/scenarios/:id', async (req, res) => {
     try {
-        const { scenarioId } = req.params;
+        if (!req.user) return res.status(401).send("로그인이 필요합니다.");
+        const scenarioId = req.params.id;
 
-        // 1. 해당 시나리오의 모든 채팅 메시지 삭제
-        await Message.deleteMany({ scenarioId });
-
-        // 2. [추가] 해당 시나리오의 주요 사건 기록(questLines) 초기화
-        await Scenario.findByIdAndUpdate(scenarioId, {
-            $set: { questLines: [] } // 배열을 텅 비웁니다.
+        // 1. 시나리오 삭제
+        const deletedScenario = await Scenario.findOneAndDelete({ 
+            _id: scenarioId, 
+            userId: req.user._id 
         });
 
-        console.log(`🧹 시나리오 ${scenarioId}의 모든 기록이 초기화되었습니다.`);
-        res.send("모든 기록이 초기화되었습니다.");
-    } catch (err) {
-        console.error("❌ 초기화 중 에러:", err);
-        res.status(500).send("초기화 실패");
+        if (!deletedScenario) return res.status(404).send("삭제 권한이 없습니다.");
+
+        // 2. 연결된 메시지들도 삭제
+        await Message.deleteMany({ scenarioId: scenarioId });
+
+        res.status(200).send("삭제 성공");
+    } catch (error) {
+        res.status(500).send("삭제 실패: " + error.message);
     }
 });
+
 
 // 9. 서버 실행
 const PORT = process.env.PORT || 8080;

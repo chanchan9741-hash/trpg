@@ -13,6 +13,31 @@
     <title>Gemini TRPG - Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
+        /* 시나리오 카드 내 삭제 버튼 스타일 */
+.card { position: relative; } /* 버튼 배치를 위해 추가 */
+
+.delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    background-color: rgba(255, 77, 77, 0.1);
+    color: #ff4d4d;
+    border: 1px solid #ff4d4d;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10; /* 카드 클릭보다 우선순위 높임 */
+    transition: 0.2s;
+}
+
+.delete-btn:hover {
+    background-color: #ff4d4d;
+    color: white;
+}
         :root {
             --bg-dark: #121212;
             --card-bg: #1e1e1e;
@@ -173,35 +198,40 @@
         };
 
         // 내 시나리오 목록 가져오기
-        async function loadMyScenarios() {
-            const grid = document.getElementById('scenario-grid');
-            try {
-                const response = await fetch('/api/my-scenarios');
-                const scenarios = await response.json();
+ async function loadMyScenarios() {
+    const grid = document.getElementById('scenario-grid');
+    try {
+        const response = await fetch('/api/my-scenarios');
+        const scenarios = await response.json();
 
-                if (scenarios.length > 0) {
-                    grid.innerHTML = ''; // 비어있음 메시지 삭제
-                    scenarios.forEach(s => {
-                        const card = document.createElement('div');
-                        card.className = 'card';
-                        card.onclick = () => location.href = `/game/${s._id}`;
-                        card.innerHTML = `
-                            <h3>${s.title}</h3>
-                            <p>${s.worldSetting || '설명이 없습니다.'}</p>
-                            <div class="card-footer">
-                                <span>생성일: ${new Date(s.createdAt).toLocaleDateString()}</span>
-                                <span>입장하기 <i class="bi bi-arrow-right"></i></span>
-                            </div>
-                        `;
-                        grid.appendChild(card);
-                    });
-                } else {
-                    grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다.</div>';
-                }
-            } catch (err) {
-                grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
-            }
+        if (scenarios.length > 0) {
+            grid.innerHTML = ''; 
+            scenarios.forEach(s => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                // 카드 클릭 시 게임 이동
+                card.onclick = () => location.href = `/game/${s._id}`;
+                
+                card.innerHTML = `
+                    <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')">
+                        <i class="bi bi-trash"></i>
+                    </div>
+                    <h3>${s.title}</h3>
+                    <p>${s.worldSetting || '설명이 없습니다.'}</p>
+                    <div class="card-footer">
+                        <span>생성일: ${new Date(s.createdAt).toLocaleDateString()}</span>
+                        <span>입장하기 <i class="bi bi-arrow-right"></i></span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        } else {
+            grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다.</div>';
         }
+    } catch (err) {
+        grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
+    }
+}
 
 // 새 시나리오 생성 함수 (이 부분만 정확히 교체하세요)
 function createNewScenario() {
@@ -215,6 +245,26 @@ function createNewScenario() {
     
     // 로그인 된 상태라면 /create 페이지로 이동
     location.href = '/create'; 
+}
+async function deleteScenario(event, id) {
+    // 중요: 카드 클릭 이벤트(게임 이동)가 발생하는 것을 막음
+    event.stopPropagation();
+
+    if (!confirm("정말로 이 시나리오를 삭제하시겠습니까? 관련 대화 기록이 모두 사라집니다.")) return;
+
+    try {
+        const response = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            alert("시나리오가 삭제되었습니다.");
+            loadMyScenarios(); // 목록 새로고침
+        } else {
+            const errMsg = await response.text();
+            alert("삭제 실패: " + errMsg);
+        }
+    } catch (err) {
+        console.error("삭제 중 오류 발생:", err);
+        alert("서버 통신 오류가 발생했습니다.");
+    }
 }
     </script>
 </body>

@@ -339,7 +339,7 @@ async function loadHistory() {
                 const content = msg.content || "내용이 없는 메시지입니다.";
 
                 // [추가] 내용이 "http"로 시작하면 이미지로 간주합니다.
-                const isImg = content.startsWith('http'); 
+                const isImg = content.startsWith('http') || content.startsWith('data:image');
 
                 // addMessage를 호출할 때 이미지 여부(isImg)를 함께 보냅니다.
                 addMessage(senderName, content, isImg);
@@ -481,38 +481,33 @@ async function generateImage() {
         });
 
         if (response.ok) {
-            // [수정] 순서 변경: json()을 먼저 기다려야 합니다.
-            const data = await response.json(); 
-            // [수정] 서버에서 보내주는 변수명이 'url'인지 'imageUrl'인지 확인 후 맞춰줍니다.
-            const imageUrl = data.url || data.imageUrl; 
+            const data = await response.json(); // [수정] 데이터를 먼저 받고 [cite: 154]
+            const imageUrl = data.imageUrl || data.url; // [수정] 그 다음에 URL을 꺼냅니다 [cite: 159]
 
             hideLoading();
             
-            if (!imageUrl) throw new Error("URL 없음");
-
-            // 화면에 표시 (세 번째 인자 true 전달)
+            // 1. 화면에 즉시 표시 [cite: 146]
             addMessage("마스터", imageUrl, true);
 
-            // DB에 저장
+            // 2. 서버 DB에 저장 요청 (이 과정이 있어야 나중에 불러옵니다) [cite: 6, 9, 23]
             await fetch('/api/chat/save-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     scenarioId: scenarioId,
                     role: 'assistant',
-                    content: imageUrl // 이미지 URL 저장
+                    content: imageUrl // 이미지 주소를 텍스트로 저장 [cite: 147]
                 })
             });
         } else {
-            throw new Error("서버 응답 오류");
+            throw new Error("이미지 생성 실패");
         }
     } catch (err) {
         hideLoading();
-        console.error("❌ 상세 에러:", err);
-        alert("이미지 생성 중 에러가 발생했습니다. 터미널의 '응답 전문'을 확인하세요.");
+        console.error(err);
+        alert("이미지 생성 중 에러가 발생했습니다.");
     }
 }
-
 
 // fetch 응답 받는 곳(data)에 아래 한 줄 추가 필수!
 // currentInventory = data.inventory || [];

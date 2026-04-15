@@ -47,6 +47,8 @@ const Message = mongoose.models.Message || mongoose.model('Message', new mongoos
 }));
 
 // 4. 미들웨어 설정
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public')); 
 app.use(express.json());
 app.use(session({
@@ -56,6 +58,7 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
 
 // 5. Passport 구글 로그인
 passport.use(new GoogleStrategy({
@@ -346,7 +349,7 @@ app.post('/api/generate-image', async (req, res) => {
             : "모험이 막 시작된 상황";
 
         // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
-        const richPrompt = `배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 한 장의 웅장한 TRPG 삽화를 그려줘.`;
+        const richPrompt = `배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 삽화를 그려줘.`;
 
         console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
 
@@ -364,19 +367,30 @@ app.post('/api/generate-image', async (req, res) => {
             })
         });
 
+        
+
         const responseText = await response.text();
         if (!response.ok) {
             return res.status(response.status).send(responseText);
         }
 
         const data = JSON.parse(responseText);
-        const imageUrl = (data.data && data.data[0] && data.data[0].url) || data.url;
 
-        if (imageUrl) {
-            console.log("✅ 이미지 생성 완료!");
-            res.json({ imageUrl: imageUrl });
+        
+        // ✅ [수정] url로 오든 b64_json으로 오든 다 잡아냅니다.
+        let extractedImage = (data.data && data.data[0] && (data.data[0].url || data.data[0].b64_json)) || data.url || data.b64_json;
+
+        if (extractedImage) {
+            // ✅ [수정] 만약 짧은 http 링크가 아니라면, HTML이 바로 인식할 수 있는 형태로 조립합니다.
+            if (!extractedImage.startsWith('http') && !extractedImage.startsWith('data:image')) {
+                extractedImage = `data:image/png;base64,${extractedImage}`;
+            }
+
+            console.log("✅ 이미지 생성 및 데이터 파싱 완료!");
+            // 프론트엔드로 조립된 데이터를 보냅니다.
+            res.json({ imageUrl: extractedImage });
         } else {
-            throw new Error("이미지 URL 추출 실패");
+            throw new Error("이미지 URL 또는 데이터 추출 실패");
         }
 
     } catch (error) {
@@ -385,20 +399,20 @@ app.post('/api/generate-image', async (req, res) => {
     }
 });
 
+// [추가] 생성된 이미지 URL을 DB에 저장하는 API
 app.post('/api/chat/save-image', async (req, res) => {
-    if (!req.user) return res.status(401).send("로그인 필요");
-    const { scenarioId, role, content } = req.body;
-    
     try {
+        const { scenarioId, role, content } = req.body;
+        // 채팅 저장과 동일하게 Message 모델을 사용합니다 [cite: 7, 1325]
         await Message.create({
             scenarioId,
-            role,
-            content // 이미지 URL 또는 <img> 태그
+            role: role || 'assistant',
+            content: content // 이미지 URL 주소가 들어갑니다
         });
         res.json({ success: true });
     } catch (err) {
-        console.error("이미지 저장 실패:", err);
-        res.status(500).send("저장 오류");
+        console.error("❌ 이미지 저장 실패:", err);
+        res.status(500).send("이미지 저장 중 오류 발생");
     }
 });
 

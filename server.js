@@ -163,7 +163,9 @@ app.post('/api/chat', async (req, res) => {
         const prevMessages = await Message.find({ scenarioId })
             .sort({ createdAt: -1 })
             .limit(5);
-        const history = prevMessages.reverse().map(msg => ({
+        const history = prevMessages.reverse()
+        .filter(msg => !msg.content.startsWith('data:image') && !msg.content.startsWith('http'))
+        .map(msg => ({
             role: msg.role,
             content: msg.content
         }));
@@ -184,7 +186,7 @@ app.post('/api/chat', async (req, res) => {
         // 4. 시스템 지시문 (매우 짧게 유지하여 크레딧 절약)
         const systemMessage = { 
             role: "system", 
-            content: `"당신은 TRPG 마스터입니다.  몰입감 있게 한국어로 대답하세요. 새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가.퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가-퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.-퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가.-새로운 아이템을 획득하면 답변 끝에 [아이템: 아이템명]을 추가.`
+            content: `"당신은 TRPG 마스터입니다.몰입감 있게 한국어로 대답하세요. 새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가.퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가-퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.-퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가.-새로운 아이템을 획득하면 답변 끝에 [아이템: 아이템명]을 추가.`
         };
 
         // 5. AI에게 보낼 메시지 조립
@@ -209,7 +211,7 @@ app.post('/api/chat', async (req, res) => {
             finalMessages.push({ role: "user", content: userMessage || "계임을 계속해줘." });
         }
 
-
+        console.log(JSON.stringify(finalMessages, null, 2));
         // 6. AI 호출
         const targetModel = model || "gpt-5.4-mini";
         const response = await openai.chat.completions.create({

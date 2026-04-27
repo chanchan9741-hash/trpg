@@ -35,6 +35,8 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     questLines: [String],
     quests: { type: Map, of: String, default: {} },
     inventory: { type: [String], default: [] }, // 아이템 리스트 추가
+    currentLocation: { type: String, default: '시작 지점' },
+    discoveredLocations: { type: [String], default: ['시작 지점'] },
     createdAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
 }));
@@ -146,31 +148,38 @@ app.post('/api/scenarios', async (req, res) => {
     await newScenario.save();
     res.json({ success: true });
 });
+
+
+
 app.post('/api/chat', async (req, res) => {
     if (!req.user) return res.status(401).send("로그인 필요");
     const { scenarioId, userMessage, model } = req.body;
-    
+
     try {
         const scenario = await Scenario.findById(scenarioId);
         if (!scenario) return res.status(404).send("시나리오 없음");
 
-        // 1. 현재까지의 메시지 개수 확인
+        // 1. 현재까지의 메시지 개수 확인 및 요약 주기 판정
         const messageCount = await Message.countDocuments({ scenarioId });
         const isFirstMessage = (messageCount === 0);
+        const shouldSummarize = (messageCount + 1) % 5 === 0; // 5턴마다 요약 지시
         const isRefreshTurn = (messageCount > 0 && (messageCount % 10 === 0 || messageCount % 10 === 1));
 
-        // 2. 최근 대화 로그 불러오기 (최근 10개)
-        const prevMessages = await Message.find({ scenarioId })
-            .sort({ createdAt: -1 })
-            .limit(5);
-        const history = prevMessages.reverse()
-        .filter(msg => !msg.content.startsWith('data:image') && !msg.content.startsWith('http'))
-        .map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        // 2. 주사위 판정 로직 (행동 키워드 감지)
+        const actionKeywords = ["공격", "조사", "열기", "설득", "훔치기", "사용"];
+        const isAction = userMessage && actionKeywords.some(k => userMessage.includes(k));
+        let diceResultText = "";
+        let diceRoll = 0;
 
-        // 3. 상황 요약본(Snapshot) 만들기 - 세계관, 퀘스트, 인벤토리 합치기
+        if (isAction) {
+            diceRoll = Math.floor(Math.random() * 20) + 1;
+            let success = diceRoll >= 10 ? "성공" : "실패";
+            if (diceRoll === 20) success = "대성공(크리티컬!)";
+            if (diceRoll === 1) success = "대실패(펌블!)";
+            diceResultText = `\n[판정 시스템: 플레이어 행동 시도. 주사위 결과: ${diceRoll} (${success}). 이 결과를 바탕으로 묘사하세요.]`;
+        }
+
+        // 3. 상황 요약본(Snapshot) 생성
         let currentQuests = scenario.quests.size > 0 
             ? Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ') 
             : "없음";
@@ -180,40 +189,52 @@ app.post('/api/chat', async (req, res) => {
             - 세계관: ${scenario.worldSetting}
             - 캐릭터: ${scenario.characterInfo}
             - 주요 사건: ${scenario.questLines.join(' -> ') || '없음'}
+            - 현재 위치: ${scenario.currentLocation || '시작 지점'}
+            - 발견한 지역: ${scenario.discoveredLocations && scenario.discoveredLocations.length > 0 ? scenario.discoveredLocations.join(', ') : '없음'}
             - 진행중인 퀘스트: ${currentQuests}
             - 보유 아이템: ${scenario.inventory.join(', ') || '없음'}`;
 
-        // 4. 시스템 지시문 (매우 짧게 유지하여 크레딧 절약)
+        // 4. 시스템 지시문 (systemInstruction) 정의
+        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 대답하세요.
+        ${shouldSummarize ? "중요: 현재까지 5턴의 대화가 진행되었습니다. 답변 끝에 [요약: 내용] 내용에 지난 5턴간의 주요 사건을 정리한 문장을 넣어 반드시 추가하세요." : ""}
+        - 퀘스트 생성/변동: [퀘스트: 이름 | 내용]
+        - 퀘스트 완료: [완료: 퀘스트이름] (관련 내용 해소 시 필수 완료 처리)
+        - 아이템 획득: [아이템: 아이템명]
+        - 장소 이동 시: [이동: 새로운 장소명] (플레이어가 다른 지역으로 이동했을 때만 답변 끝에 반드시 추가)`;
+
         const systemMessage = { 
             role: "system", 
-            content: `"당신은 TRPG 마스터입니다.몰입감 있게 한국어로 대답하세요. 새로운 중요 사건이 발생했다면 답변 끝에 [요약: 사건내용] 형식으로 딱 한 줄만 추가.퀘스트 변동/생성은 [퀘스트: 이름 | 내용] 형식으로 답변 끝에 추가-퀘스트 생성/변동 시 끝에 [퀘스트: 이름 | 내용] 추가.-퀘스트가 완료되었다면 답변 끝에 [완료: 퀘스트이름] 형식을 반드시 추가.-새로운 아이템을 획득하면 답변 끝에 [아이템: 아이템명]을 추가.`
+            content: systemInstruction + "\n" + statusSnapshot + (diceResultText || "")
         };
 
-        // 5. AI에게 보낼 메시지 조립
-        let finalMessages = [systemMessage];
+        // 5. 최근 대화 로그 불러오기 (최근 5개)
+        const prevMessages = await Message.find({ scenarioId }).sort({ createdAt: -1 }).limit(5);
+        const history = prevMessages.reverse()
+            .filter(msg => msg.content && !msg.content.startsWith('data:image') && !msg.content.startsWith('http'))
+            .map(msg => ({ role: msg.role, content: msg.content }));
 
+        // 6. AI에게 보낼 메시지 조립
+        let finalMessages = [systemMessage];
         if (isFirstMessage) {
-            // [첫 시작] 시나리오 내용을 유저 메시지처럼 위장해서 던짐 -> 웅장한 오프닝 유도
             finalMessages.push({ 
                 role: "user", 
-                content: `[모험 시작] 아래 설정을 바탕으로 오프닝 서술을 시작해줘. \n${statusSnapshot}` 
+                content: `[모험 시작] 아래 설정을 바탕으로 오프닝을 시작해줘.\n${statusSnapshot}` 
             });
-            console.log("🎬 [시스템] 시나리오 기반 오프닝을 시작합니다.");
         } else {
-            // [평소] 10번마다 한 번씩 대화 로그 맨 앞에 상황 요약본 주입
             if (isRefreshTurn) {
                 finalMessages.push({ role: "user", content: `(마스터, 상황 복습: ${statusSnapshot})` });
-                console.log("📝 [시스템] 10턴 주기가 되어 기억을 새로고침합니다.");
             }
-            // 기존 대화 기록 합치기
             finalMessages = finalMessages.concat(history);
-            // 현재 유저가 입력한 메시지 추가
-            finalMessages.push({ role: "user", content: userMessage || "계임을 계속해줘." });
+            finalMessages.push({ role: "user", content: userMessage || "게임을 계속해줘." });
         }
 
+        // [로그 출력]
+        console.log("\n================ [🤖 AI 호출 프롬프트] ================");
+        console.log(`순번: ${messageCount + 1} / 주사위: ${diceRoll || '없음'} / 요약요청: ${shouldSummarize}`);
         console.log(JSON.stringify(finalMessages, null, 2));
-        // 6. AI 호출
-        const targetModel = model || "gpt-5.4-mini";
+
+        // 7. AI 호출
+        const targetModel = model || "gpt-4o-mini"; // 모델명 오타 주의 (gpt-4o-mini 등)
         const response = await openai.chat.completions.create({
             model: targetModel,
             messages: finalMessages,
@@ -221,30 +242,49 @@ app.post('/api/chat', async (req, res) => {
             temperature: 0.8
         });
 
-        // 7. 토큰 및 크레딧 로그 출력
-        const usage = response.usage;
-        console.log("-----------------------------------------");
-        console.log(`📊 사용 모델: ${targetModel} (총 메시지 수: ${messageCount})`);
-        console.log(`- Prompt: ${usage.prompt_tokens} / Completion: ${usage.completion_tokens}`);
-        console.log(`- Total: ${usage.total_tokens}`);
-        if (usage.total_credits) console.log(`- 소모 크레딧: ${usage.total_credits} CR`);
-        console.log("-----------------------------------------");
+        // 8. 응답 처리 및 주사위 표시 추가
+        let rawReply = response.choices[0].message.content;
+        let aiReplyWithDice = isAction ? `🎲 주사위 판정: ${diceRoll}\n\n${rawReply}` : rawReply;
 
-        const aiReply = response.choices[0].message.content;
-
-        // 8. DB 저장 (유저 메시지와 AI 응답 저장)
-        if (!isFirstMessage) {
+        // 9. DB 저장
+        if (!isFirstMessage && userMessage) {
             await Message.create({ scenarioId, role: 'user', content: userMessage });
         }
-        await Message.create({ scenarioId, role: 'assistant', content: aiReply });
+        await Message.create({ scenarioId, role: 'assistant', content: aiReplyWithDice });
 
-        // 9. 데이터 추출 (퀘스트, 아이템, 요약 등)
-        const questMatches = aiReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g);
-        const eventMatch = aiReply.match(/\[요약: (.*?)\]/);
-        const completedMatches = aiReply.matchAll(/\[완료: (.*?)\]/g);
-        const itemMatch = aiReply.match(/\[아이템: (.*?)\]/);
+        // 10. 데이터 추출 및 시나리오 업데이트
+        const questMatches = Array.from(rawReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g));
+        const eventMatch = rawReply.match(/\[요약: (.*?)\]/);
+        const completedMatches = Array.from(rawReply.matchAll(/\[완료: (.*?)\]/g));
+        const itemMatch = rawReply.match(/\[아이템: (.*?)\]/);
+        const locationMatch = rawReply.match(/\[이동: (.*?)\]/);
 
         let isUpdated = false;
+
+        if (locationMatch) {
+            const newLocation = locationMatch[1].trim();
+            scenario.currentLocation = newLocation;
+            if (!scenario.discoveredLocations) scenario.discoveredLocations = [];
+            if (!scenario.discoveredLocations.includes(newLocation)) {
+                scenario.discoveredLocations.push(newLocation);
+            }
+            isUpdated = true;
+        }
+
+        if (isUpdated) {
+            await Scenario.findByIdAndUpdate(scenarioId, {
+                $set: { 
+                    quests: scenario.quests, 
+                    inventory: scenario.inventory,
+                    questLines: scenario.questLines,
+                    currentLocation: scenario.currentLocation, // 추가
+                    discoveredLocations: scenario.discoveredLocations // 추가
+                }
+            });
+        }
+
+
+
         if (itemMatch) {
             const newItem = itemMatch[1].trim();
             if (!scenario.inventory.includes(newItem)) {
@@ -252,51 +292,52 @@ app.post('/api/chat', async (req, res) => {
                 isUpdated = true;
             }
         }
-        for (const match of questMatches) {
-            scenario.quests.set(match[1].trim(), match[2].trim());
+        questMatches.forEach(m => {
+            scenario.quests.set(m[1].trim(), m[2].trim());
             isUpdated = true;
-        }
-        for (const match of completedMatches) {
-            const qName = match[1].trim();
+        });
+        completedMatches.forEach(m => {
+            const qName = m[1].trim();
             if (scenario.quests.has(qName)) {
-                const currentContent = scenario.quests.get(qName);
-                if (!currentContent.startsWith('✅')) {
-                    scenario.quests.set(qName, `✅ 완료됨: ${currentContent}`);
+                const content = scenario.quests.get(qName);
+                if (!content.startsWith('✅')) {
+                    scenario.quests.set(qName, `✅ 완료됨: ${content}`);
                     isUpdated = true;
                 }
             }
-        }
+        });
         if (eventMatch) {
             scenario.questLines.push(eventMatch[1].trim());
             isUpdated = true;
         }
 
         if (isUpdated) {
-        await Scenario.findByIdAndUpdate(scenarioId, {
-        $set: { 
-            quests: scenario.quests, 
-            inventory: scenario.inventory,
-            questLines: scenario.questLines 
-        }
-    });
+            await Scenario.findByIdAndUpdate(scenarioId, {
+                $set: { 
+                    quests: scenario.quests, 
+                    inventory: scenario.inventory,
+                    questLines: scenario.questLines 
+                }
+            });
         }
 
-        // 10. 클라이언트에 응답 (태그 제거)
-        const cleanReply = aiReply.replace(/\[.*?\]/g, "").trim();
+        // 11. 클라이언트에 응답 (태그 제거)
+         const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|이동): .*?\]/g, "").trim();
         return res.json({ 
             reply: cleanReply, 
+            diceValue: diceRoll,
             questLines: scenario.questLines,
             quests: Object.fromEntries(scenario.quests),
-            inventory: scenario.inventory
+            inventory: scenario.inventory,
+            currentLocation: scenario.currentLocation, // 클라이언트에 전송
+            discoveredLocations: scenario.discoveredLocations // 클라이언트에 전송
         });
 
     } catch (error) {
-        console.error("❌ 에러 발생:", error.message);
-        if (!res.headersSent) res.status(500).send("서버 에러");
+        console.error("❌ 에러 발생:", error);
+        if (!res.headersSent) res.status(500).send("서버 에러: " + error.message);
     }
 });
-// [추가] 시나리오의 이전 대화 로그 불러오기 API
-// [✅ 백엔드 수정] 
 
 
 // [추가] 시나리오의 대화 로그 초기화(삭제) API

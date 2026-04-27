@@ -3,69 +3,46 @@
 <head>
     <script>
     const url = window.location.href;
-
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini TRPG - Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        /* 시나리오 카드 내 삭제 버튼 스타일 */
-.card { position: relative; } /* 버튼 배치를 위해 추가 */
-
-.delete-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 28px;
-    height: 28px;
-    background-color: rgba(255, 77, 77, 0.1);
-    color: #ff4d4d;
-    border: 1px solid #ff4d4d;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 10; /* 카드 클릭보다 우선순위 높임 */
-    transition: 0.2s;
-}
-
-.delete-btn:hover {
-    background-color: #ff4d4d;
-    color: white;
-}
+        /* 🎨 TRPG 다크 판타지 테마 색상 적용 */
         :root {
-            --bg-dark: #121212;
-            --card-bg: #1e1e1e;
-            --accent: #6c5ce7;
-            --text: #ffffff;
-            --text-dim: #b3b3b3;
+            --bg-dark-brown: #3E2723;    /* 바탕 배경 */
+            --bg-beige: #F5F5DC;         /* 카드/네비게이션 배경 */
+            --accent-blue-gray: #607D8B; /* 버튼/포인트 색상 */
+            --white: #FFFFFF;
+            --text-black: #000000;
+            --text-gray: #555555;
         }
 
         body {
-            
             font-family: 'Pretendard', sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text);
+            background-color: var(--bg-dark-brown);
+            color: var(--bg-beige); /* 바깥 텍스트는 밝게 */
             margin: 0;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
 
-        /* 네비게이션 바 */
+        /* 네비게이션 바 (베이지색 패널) */
         nav {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 5%;
-            background-color: var(--card-bg);
-            border-bottom: 1px solid #333;
+            padding: 10px 5%;
+            background-color: var(--bg-beige);
+            border-bottom: 2px solid var(--white);
+            color: var(--text-black);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
 
-        .logo { font-size: 1.5rem; font-weight: bold; color: var(--accent); cursor: pointer; }
-        .user-menu { display: flex; align-items: center; gap: 15px; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: var(--accent-blue-gray); cursor: pointer; }
+        .user-menu { display: flex; align-items: center; gap: 15px; font-weight: bold; color: #333; }
 
         /* 메인 컨텐츠 */
         main {
@@ -78,8 +55,8 @@
             text-align: left;
         }
 
-        .hero-section h1 { font-size: 2.5rem; margin-bottom: 10px; }
-        .hero-section p { color: var(--text-dim); }
+        .hero-section h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--bg-beige); text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .hero-section p { color: #cccccc; }
 
         /* 시나리오 카드 그리드 */
         .grid {
@@ -88,32 +65,68 @@
             gap: 20px;
         }
 
+        /* 시나리오 카드 (양피지 느낌) */
         .card {
-            background-color: var(--card-bg);
+            position: relative;
+            background-color: var(--bg-beige);
             border-radius: 12px;
             padding: 20px;
-            border: 1px solid #333;
-            transition: transform 0.2s, border-color 0.2s;
+            border: 2px solid var(--white);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
             cursor: pointer;
+            color: var(--text-black);
         }
 
         .card:hover {
             transform: translateY(-5px);
-            border-color: var(--accent);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            border-color: var(--accent-blue-gray);
         }
 
-        .card h3 { margin: 0 0 10px 0; }
-        .card p { font-size: 0.9rem; color: var(--text-dim); height: 40px; overflow: hidden; }
+        .card h3 { 
+            margin: 0 0 10px 0; 
+            color: var(--text-black); 
+            border-bottom: 2px solid var(--accent-blue-gray); 
+            padding-bottom: 8px;
+        }
+        .card p { font-size: 0.95rem; color: var(--text-gray); height: 40px; overflow: hidden; line-height: 1.4;}
         
         .card-footer {
             margin-top: 15px;
             display: flex;
             justify-content: space-between;
-            font-size: 0.8rem;
-            color: var(--accent);
+            font-size: 0.85rem;
+            color: var(--accent-blue-gray);
+            font-weight: bold;
         }
 
-        /* 버튼 스타일 */
+        /* 삭제 버튼 (카드 내) */
+        .delete-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 32px;
+            height: 32px;
+            background-color: rgba(255, 77, 77, 0.1);
+            color: #d63031;
+            border: 1px solid #d63031;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            transition: 0.2s;
+        }
+
+        .delete-btn:hover {
+            background-color: #d63031;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* 버튼 스타일 (청회색 포인트) */
         .btn {
             padding: 10px 20px;
             border-radius: 8px;
@@ -123,18 +136,22 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            transition: 0.3s;
+            transition: 0.2s;
+            font-size: 1rem;
         }
 
-        .btn-primary { background-color: var(--accent); color: white; }
-        .btn-outline { background-color: transparent; border: 1px solid var(--accent); color: var(--accent); }
-        .btn:hover { opacity: 0.8; }
+        .btn-primary { background-color: var(--accent-blue-gray); color: white; border: 1px solid var(--white); }
+        .btn-outline { background-color: var(--white); border: 2px solid var(--accent-blue-gray); color: var(--accent-blue-gray); }
+        .btn:hover { opacity: 0.9; transform: translateY(-2px); }
 
         #scenario-list-empty {
             text-align: center;
             padding: 50px;
-            color: var(--text-dim);
+            color: #aaa;
             grid-column: 1 / -1;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            border: 1px dashed #777;
         }
     </style>
 </head>
@@ -144,7 +161,7 @@
         <div class="logo" onclick="location.href='/'">Gemini TRPG</div>
         <div class="user-menu" id="auth-menu">
             <span id="user-name">불러오는 중...</span>
-            <button class="btn btn-primary" id="auth-btn">연결 중...</button>
+            <button class="btn btn-outline" id="auth-btn" style="padding: 8px 15px; font-size: 0.9rem;">연결 중...</button>
         </div>
     </nav>
 
@@ -157,8 +174,8 @@
             </button>
         </section>
 
-        <h2>내 시나리오 목록</h2>
-        <div class="grid" id="scenario-grid">
+        <h2 style="color: var(--bg-beige); border-bottom: 2px solid var(--accent-blue-gray); padding-bottom: 10px; display: inline-block;">내 시나리오 목록</h2>
+        <div class="grid" id="scenario-grid" style="margin-top: 20px;">
             <div id="scenario-list-empty">로그인하여 시나리오를 확인하세요.</div>
         </div>
     </main>
@@ -195,74 +212,74 @@
         };
 
         // 내 시나리오 목록 가져오기
- async function loadMyScenarios() {
-    const grid = document.getElementById('scenario-grid');
-    try {
-        const response = await fetch('/api/my-scenarios');
-        const scenarios = await response.json();
+        async function loadMyScenarios() {
+            const grid = document.getElementById('scenario-grid');
+            try {
+                const response = await fetch('/api/my-scenarios');
+                const scenarios = await response.json();
 
-        if (scenarios.length > 0) {
-            grid.innerHTML = ''; 
-            scenarios.forEach(s => {
-                const card = document.createElement('div');
-                card.className = 'card';
-                // 카드 클릭 시 게임 이동
-                card.onclick = () => location.href = `/game/${s._id}`;
-                
-                card.innerHTML = `
-                    <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')">
-                        <i class="bi bi-trash"></i>
-                    </div>
-                    <h3>${s.title}</h3>
-                    <p>${s.worldSetting || '설명이 없습니다.'}</p>
-                    <div class="card-footer">
-                        <span>생성일: ${new Date(s.createdAt).toLocaleDateString()}</span>
-                        <span>입장하기 <i class="bi bi-arrow-right"></i></span>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
-        } else {
-            grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다.</div>';
+                if (scenarios.length > 0) {
+                    grid.innerHTML = ''; 
+                    scenarios.forEach(s => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        // 카드 클릭 시 게임 이동
+                        card.onclick = () => location.href = `/game/${s._id}`;
+                        
+                        card.innerHTML = `
+                            <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')" title="삭제">
+                                <i class="bi bi-trash"></i>
+                            </div>
+                            <h3>${s.title}</h3>
+                            <p>${s.worldSetting || '설명이 없습니다.'}</p>
+                            <div class="card-footer">
+                                <span>📅 ${new Date(s.createdAt).toLocaleDateString()}</span>
+                                <span>입장하기 <i class="bi bi-arrow-right"></i></span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다. <br><br>위의 [새 시나리오 생성] 버튼을 눌러 모험을 시작하세요!</div>';
+                }
+            } catch (err) {
+                grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
+            }
         }
-    } catch (err) {
-        grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
-    }
-}
 
-// 새 시나리오 생성 함수 (이 부분만 정확히 교체하세요)
-function createNewScenario() {
-    const authBtn = document.getElementById('auth-btn');
-    
-    // 버튼 텍스트가 "Google 로그인"이면 로그인이 안 된 상태임
-    if (authBtn.innerText === "Google 로그인") {
-        alert("로그인이 필요한 서비스입니다.");
-        return;
-    }
-    
-    // 로그인 된 상태라면 /create 페이지로 이동
-    location.href = '/create'; 
-}
-async function deleteScenario(event, id) {
-    // 중요: 카드 클릭 이벤트(게임 이동)가 발생하는 것을 막음
-    event.stopPropagation();
-
-    if (!confirm("정말로 이 시나리오를 삭제하시겠습니까? 관련 대화 기록이 모두 사라집니다.")) return;
-
-    try {
-        const response = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
-        if (response.ok) {
-            alert("시나리오가 삭제되었습니다.");
-            loadMyScenarios(); // 목록 새로고침
-        } else {
-            const errMsg = await response.text();
-            alert("삭제 실패: " + errMsg);
+        // 새 시나리오 생성 함수 
+        function createNewScenario() {
+            const authBtn = document.getElementById('auth-btn');
+            
+            // 버튼 텍스트가 "Google 로그인"이면 로그인이 안 된 상태임
+            if (authBtn.innerText === "Google 로그인") {
+                alert("로그인이 필요한 서비스입니다.");
+                return;
+            }
+            
+            // 로그인 된 상태라면 /create 페이지로 이동
+            location.href = '/create'; 
         }
-    } catch (err) {
-        console.error("삭제 중 오류 발생:", err);
-        alert("서버 통신 오류가 발생했습니다.");
-    }
-}
+
+        async function deleteScenario(event, id) {
+            // 중요: 카드 클릭 이벤트(게임 이동)가 발생하는 것을 막음
+            event.stopPropagation();
+
+            if (!confirm("정말로 이 시나리오를 삭제하시겠습니까?\n관련 대화 기록이 모두 사라집니다.")) return;
+
+            try {
+                const response = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadMyScenarios(); // 목록 새로고침
+                } else {
+                    const errMsg = await response.text();
+                    alert("삭제 실패: " + errMsg);
+                }
+            } catch (err) {
+                console.error("삭제 중 오류 발생:", err);
+                alert("서버 통신 오류가 발생했습니다.");
+            }
+        }
     </script>
 </body>
 </html>

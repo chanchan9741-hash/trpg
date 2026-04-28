@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>모험 중 - Gemini TRPG</title>
     <style>
+
+                /* 📜 게임 전체의 예쁜 커스텀 스크롤바 */
+        ::-webkit-scrollbar { width: 6px; } /* 아주 얇게 */
+        ::-webkit-scrollbar-track { background: transparent; } /* 뒷 배경은 투명하게 */
+        ::-webkit-scrollbar-thumb { background: var(--accent-blue-gray); border-radius: 10px; } /* 스크롤 막대는 청회색 둥글게 */
+        ::-webkit-scrollbar-thumb:hover { background: #455A64; }
+
         /* 🎨 요청하신 정확한 색상 테마 적용 */
         :root {
             --bg-dark-brown: #3E2723;    /* 어두운 갈색 (가장 바깥쪽 배경) */
@@ -16,7 +23,7 @@
         }
 
         body { 
-            background: var(--bg-dark-brown); /* 가장 바깥 배경: 어두운 갈색 */
+            background: var(--bg-dark-brown); 
             display: flex; 
             flex-direction: column; 
             height: 100vh; 
@@ -29,7 +36,7 @@
         header {
             display: flex; justify-content: space-between; align-items: center; 
             padding: 10px 5%; 
-            background: var(--bg-beige); /* 헤더도 패널과 동일한 베이지색 */
+            background: var(--bg-beige); 
             border-bottom: 2px solid var(--white);
         }
 
@@ -43,15 +50,16 @@
             box-sizing: border-box;
         }
 
-        /* 좌, 우측 사이드 패널 (베이지색) */
+        /* 좌, 우측 사이드 패널 */
         .side-panel {
             width: 320px;
             background: var(--bg-beige);
             display: flex;
             flex-direction: column;
-            border: 2px solid var(--white); /* 중앙 패널을 둘러싼 바깥 테두리 흰색과 통일감 */
+            border: 2px solid var(--white); 
             border-radius: 8px;
             padding: 15px;
+            box-sizing: border-box;
         }
 
         /* 중앙 패널 (채팅창) */
@@ -60,34 +68,33 @@
             display: flex;
             flex-direction: column;
             background: var(--bg-beige);
-            border: 4px solid var(--accent-blue-gray); /* 중앙 메인 사각형 영역 테두리: 청회색 */
-            box-shadow: 0 0 0 2px var(--white); /* 중앙 패널을 둘러싼 바깥 테두리: 흰색 */
+            border: 4px solid var(--accent-blue-gray); 
+            box-shadow: 0 0 0 2px var(--white); 
             border-radius: 8px;
         }
 
-        /* 패널 카테고리 제목 (검은색 텍스트) */
+        /* 패널 카테고리 제목 */
         .panel-title {
             color: var(--text-black);
             font-weight: bold;
             font-size: 1.2rem;
             text-align: center;
             margin-top: 0;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
             border-bottom: 2px solid var(--accent-blue-gray);
         }
 
         /* 콘텐츠 영역 (밝은 회색) */
         .content-area {
-            flex: 1;
             background: var(--bg-light-gray);
             border-radius: 6px;
-            padding: 15px;
+            padding: 10px;
             overflow-y: auto;
             color: #333;
         }
 
-        /* 채팅창 영역 (밝은 회색 적용) */
+        /* 채팅창 영역 */
         #chat-window { 
             flex: 1; 
             overflow-y: auto; 
@@ -119,7 +126,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        /* 마스터 메시지 (왼쪽 배치, 청회색 배경, 왼쪽 화살표 느낌) */
         .master { 
             background: var(--accent-blue-gray); 
             color: white;
@@ -127,7 +133,6 @@
             border-top-left-radius: 0;
         }
 
-        /* 플레이어 메시지 (오른쪽 배치, 흰색 배경) */
         .player { 
             background: var(--white); 
             color: #333;
@@ -145,7 +150,6 @@
             align-items: center;
         }
 
-        /* 입력창 (흰색 배경) */
         input { 
             flex: 1; 
             padding: 14px; 
@@ -159,7 +163,6 @@
 
         input:focus { box-shadow: 0 0 5px var(--accent-blue-gray); }
 
-        /* 전송 버튼 (청회색) */
         button { 
             padding: 0 25px; 
             background: var(--accent-blue-gray); 
@@ -172,17 +175,16 @@
             height: 48px;
         }
         
-        /* 🎲 주사위 시각화 스타일 (3D 리얼 굴림 효과) */
+        /* 주사위 시각화 스타일 */
         #dice-area {
-            margin-top: 20px; padding: 15px;
+            margin-top: 15px; padding: 15px;
             background: rgba(0,0,0,0.05); border-radius: 10px;
             text-align: center; border: 1px dashed var(--accent-blue-gray);
-            perspective: 500px; /* 3D 효과를 위한 원근감 추가 */
+            perspective: 500px; 
         }
         
         .dice {
             width: 60px; height: 60px; margin: 0 auto;
-            /* 입체감을 주는 그라데이션과 그림자 */
             background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
             box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), 0 5px 10px rgba(0,0,0,0.3);
             color: var(--text-black);
@@ -192,10 +194,7 @@
             transition: all 0.2s ease-out;
         }
 
-        /* 덤블링하며 회전하고 통통 튀는 애니메이션 */
-        .dice.rolling {
-            animation: realistic-roll 0.4s infinite linear;
-        }
+        .dice.rolling { animation: realistic-roll 0.4s infinite linear; }
 
         @keyframes realistic-roll {
             0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateY(0); }
@@ -207,11 +206,10 @@
 
         button:hover { opacity: 0.9; transform: translateY(-2px); }
 
-        /* 리스트 스타일 (기록, 인벤토리 등) */
         ul { list-style-type: none; padding: 0; margin: 0; }
         li { margin-bottom: 10px; line-height: 1.5; }
 
-        /* 로딩 애니메이션 스타일 */
+        /* 로딩 애니메이션 */
         .loading {
             display: flex; align-items: center; gap: 5px;
             color: var(--accent-blue-gray); font-style: italic; margin: 10px 0; font-weight: bold;
@@ -244,12 +242,39 @@
 
 <div id="game-container">
     <div class="side-panel">
-        <div class="panel-title">가방</div>
-        <div class="content-area" style="flex: 1; margin-bottom: 15px;">
-            <ul id="inventory-list-modal"></ul>
+        
+        <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px dashed var(--accent-blue-gray);">
+            <div onclick="generatePlayerImage()" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--accent-blue-gray); overflow: hidden; background-color: var(--bg-dark-brown); box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer; position: relative;">
+                <img id="player-profile-img" src="https://cdn-icons-png.flaticon.com/512/847/847969.png" alt="초상화" style="width: 100%; height: 100%; object-fit: cover;">
+                
+                <div id="profile-loading" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); color: white; display: none; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: bold;">
+                    그리는 중...
+                </div>
+            </div>
+            
         </div>
         
-        <div id="dice-area" style="padding: 15px; background: var(--bg-light-gray); border-radius: 6px; text-align: center; border: 2px solid var(--accent-blue-gray);">
+<div class="panel-title">🗡️ 상태창</div>
+        <div class="content-area" style="flex: 1.3; display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; overflow: hidden;">
+            <div>
+                <div style="font-size: 1rem; font-weight: bold; color: var(--text-black);">❤️ 체력 (HP)</div>
+                <div style="background: #ccc; border-radius: 5px; margin-top: 6px; overflow: hidden; border: 1px solid var(--accent-blue-gray);">
+                    <div id="hp-bar" style="background: #e74c3c; width: 100%; height: 24px; color: white; text-align: center; font-size: 0.95rem; line-height: 24px; transition: width 0.3s; font-weight: bold;">100 / 100</div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1rem; padding-bottom: 8px; border-bottom: 2px dashed #ccc;">
+                <span style="font-weight: bold; color: var(--text-black);">💰 소지 금화</span>
+                <span id="gold-value" style="font-weight: bold; color: #d35400;">0 G</span>
+            </div>
+            
+            <button onclick="openSkillModal()" style="margin-top: 5px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent-blue-gray); color: white; border: 2px solid var(--white); border-radius: 8px; cursor: pointer; transition: 0.3s; padding: 12px; font-size: 1.05rem; font-weight: bold;">
+                ✨ 스킬 및 특성 확인
+            </button>
+        </div>
+
+
+        
+        <div id="dice-area">
             <div id="dice-box" style="width: 60px; height: 60px; background: white; color: black; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; border-radius: 10px; border: 2px solid var(--accent-blue-gray); margin: 0 auto;">?</div>
             <p id="dice-status" style="font-size: 0.9rem; margin-top: 10px; margin-bottom: 0; color: #333; font-weight: bold;">판정 대기 중...</p>
         </div>
@@ -264,22 +289,27 @@
             <button onclick="generateImage()" style="background: #e67e22;">그림</button>
         </div>
     </div>
-<div class="side-panel">
+
+ <div class="side-panel">
         <div class="panel-title">🗺️ 현재 지도</div>
         <div class="content-area" style="flex: 1; margin-bottom: 15px;">
             <ul id="location-list-right" style="font-size: 0.95rem; line-height: 1.8;"></ul>
         </div>
 
-        <button id="open-journal-btn" style="flex: 0.4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--accent-blue-gray); color: white; border: 2px solid var(--white); border-radius: 8px; cursor: pointer; transition: 0.3s;">
-            <span style="font-size: 2rem;">📖</span>
-            <span style="font-weight: bold; font-size: 1.1rem;">모험 일지 & 퀘스트</span>
-        </button>
+        <div style="display: flex; flex-direction: column; gap: 10px; flex: 0.6;">
+            <button onclick="openInventoryModal()" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: #8D6E63; color: white; border: 2px solid var(--white); border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                <span style="font-size: 1.8rem;">🎒</span>
+                <span style="font-weight: bold; font-size: 1.1rem;">장비 및 소지품</span>
+            </button>
+            
+            <button id="open-journal-btn" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; background: var(--accent-blue-gray); color: white; border: 2px solid var(--white); border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                <span style="font-size: 1.8rem;">📖</span>
+                <span style="font-weight: bold; font-size: 1.1rem;">모험 일지 & 퀘스트</span>
+            </button>
+        </div>
     </div>
 
 <script>
-    // ==========================================
-    // 찬수 님 원본 변수 및 로직 100% 동일하게 유지
-    // ==========================================
     const chatWindow = document.getElementById('chat-window'); 
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
@@ -288,56 +318,147 @@
     let currentEvents = [];
     let currentQuests = {};
     let currentInventory = [];
+    let currentLocation = "알 수 없음";
+    let discoveredLocations = [];
+
+    // 💡 캐릭터 상태 변수 추가
+    let currentHp = 100;
+    let maxHp = 100;
+    let currentGold = 0;
+    let currentSkills = ['기본 공격'];
 
     const diceBox = document.getElementById('dice-box');
-const diceStatus = document.getElementById('dice-status');
+    const diceStatus = document.getElementById('dice-status');
 
-function animateDice(finalValue) {
-    if (!diceBox || !diceStatus) return;
-    
-    diceBox.classList.add('rolling');
-    diceStatus.innerText = "운명을 결정하는 중...";
-    diceStatus.style.color = "#333";
-    
-    let count = 0;
-    const interval = setInterval(() => {
-        diceBox.innerText = Math.floor(Math.random() * 20) + 1;
-        count++;
-        if (count > 12) {
-            clearInterval(interval);
-            diceBox.classList.remove('rolling');
-            diceBox.innerText = finalValue;
-            diceStatus.innerText = finalValue >= 10 ? "판정 성공! 🎉" : "판정 실패... 💀";
-            diceBox.style.background = finalValue >= 10 ? "#4CAF50" : "#F44336";
-            diceBox.style.color = "white";
-            
-            // 3초 뒤에 원래 색상으로 복구
-            setTimeout(() => { 
-                diceBox.style.background = "white"; 
-                diceBox.style.color = "black"; 
-            }, 3000);
+    // 🖼️ 플레이어 사진 화면에 적용하는 함수
+    function updatePlayerImageUI(url) {
+        const profileImg = document.getElementById('player-profile-img');
+        if (profileImg && url) {
+            profileImg.src = url; // 생성된 사진 주소로 갈아끼움
         }
-    }, 50);
-}
+    }
 
+    // 🎨 사진 생성 (액자 클릭 시 실행)
+    async function generatePlayerImage() {
+        if (!scenarioId) return;
+        if (!confirm("주인공 설정을 바탕으로 초상화를 그려낼까요?")) return;
 
-    // 🗺️ 지도 정보 렌더링 (오른쪽 패널용)
+        const loader = document.getElementById('profile-loading');
+        loader.style.display = 'flex'; // 로딩 화면 표시
+
+        try {
+            const response = await fetch('/api/generate-player-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scenarioId })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                updatePlayerImageUI(data.playerImageUrl); // 성공 시 화면 변경
+                addMessage("시스템", "당신의 초상화가 완성되었습니다.");
+            } else {
+                alert("초상화 생성에 실패했습니다.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("사진 생성 중 오류가 발생했습니다.");
+        } finally {
+            loader.style.display = 'none'; // 로딩 화면 숨김
+        }
+    }
+
+// 🎒 가방 모달 열기/닫기 함수
+    function openInventoryModal() {
+        document.getElementById('inventory-modal').style.display = 'flex';
+        renderInventoryContent(); // 창을 열 때 가방 최신 상태로 새로고침
+    }
+    
+    function closeInventoryModal() {
+        document.getElementById('inventory-modal').style.display = 'none';
+    }
+
+    // 기존의 가방 렌더링 함수를 모달 디자인에 맞게 살짝 수정 (이미 있다면 덮어씌우세요)
+    function renderInventoryContent() {
+        const list = document.getElementById('inventory-list-modal');
+        if(!list) return;
+        
+        list.innerHTML = currentInventory.length > 0 
+            ? currentInventory.map(item => `<li style="background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; align-items:center; gap:8px;">🗡️ ${item}</li>`).join('') 
+            : "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
+    }
+
+    function animateDice(finalValue) {
+        if (!diceBox || !diceStatus) return;
+        diceBox.classList.add('rolling');
+        diceStatus.innerText = "운명을 결정하는 중...";
+        diceStatus.style.color = "#333";
+        
+        let count = 0;
+        const interval = setInterval(() => {
+            diceBox.innerText = Math.floor(Math.random() * 20) + 1;
+            count++;
+            if (count > 12) {
+                clearInterval(interval);
+                diceBox.classList.remove('rolling');
+                diceBox.innerText = finalValue;
+                diceStatus.innerText = finalValue >= 10 ? "판정 성공! 🎉" : "판정 실패... 💀";
+                diceBox.style.background = finalValue >= 10 ? "#4CAF50" : "#F44336";
+                diceBox.style.color = "white";
+                
+                setTimeout(() => { 
+                    diceBox.style.background = "white"; 
+                    diceBox.style.color = "black"; 
+                }, 3000);
+            }
+        }, 50);
+    }
+
+    // 상태창 화면 업데이트 함수
+    // 상태창(HP, 골드) 및 스킬 모달 업데이트 함수
+    function renderStatusWindowUI() {
+        const hpBar = document.getElementById('hp-bar');
+        const goldValue = document.getElementById('gold-value');
+        // 💡 이제 화면 왼쪽이 아니라 모달 안의 리스트를 업데이트합니다.
+        const skillListModal = document.getElementById('skill-list-modal');
+
+        if (hpBar) {
+            let safeHp = Math.max(0, Math.min(currentHp, maxHp)); 
+            let hpPercent = (safeHp / maxHp) * 100;
+            hpBar.style.width = hpPercent + '%';
+            hpBar.innerText = `${safeHp} / ${maxHp}`;
+        }
+
+        if (goldValue) goldValue.innerText = `${currentGold} G`;
+
+        // 💡 스킬 모달 업데이트
+        if (skillListModal) {
+            skillListModal.innerHTML = currentSkills.length > 0 
+                ? currentSkills.map(skill => `<li style="margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; color: #2c3e50;">🔹 ${skill}</li>`).join('')
+                : "<li style='color:#777; font-weight:normal;'>아직 습득한 스킬이 없습니다.</li>";
+        }
+    }
+
+    // ✨ 스킬 모달 열기/닫기 함수 (스크립트 아무 곳에나 추가하세요)
+    function openSkillModal() {
+        document.getElementById('skill-modal').style.display = 'flex';
+        renderStatusWindowUI(); // 창을 열 때 최신 상태로 한 번 더 그려줌
+    }
+    
+    function closeSkillModal() {
+        document.getElementById('skill-modal').style.display = 'none';
+    }
+
+    // 지도 렌더링
     function renderMapContent() {
         const locListEl = document.getElementById('location-list-right');
         if (!locListEl) return;
-
         if (discoveredLocations && discoveredLocations.length > 0) {
             locListEl.innerHTML = discoveredLocations.map(loc => {
-                // 현재 위치인 경우 왼쪽에 ▶ 마커와 볼드 처리
                 if (loc === currentLocation) {
-                    return `<li style="color: var(--accent-blue-gray); font-weight: bold; list-style: none;">
-                                <span style="margin-right: 8px;">▶</span>${loc}
-                            </li>`;
+                    return `<li style="color: var(--accent-blue-gray); font-weight: bold; list-style: none;"><span style="margin-right: 8px;">▶</span>${loc}</li>`;
                 } else {
-                    // 방문했던 다른 장소들은 ▷ 표시
-                    return `<li style="color: #666; list-style: none;">
-                                <span style="margin-right: 8px; opacity: 0.5;">▷</span>${loc}
-                            </li>`;
+                    return `<li style="color: #666; list-style: none;"><span style="margin-right: 8px; opacity: 0.5;">▷</span>${loc}</li>`;
                 }
             }).join('');
         } else {
@@ -345,9 +466,7 @@ function animateDice(finalValue) {
         }
     }
 
-
-
-    // [3분할 레이아웃 연동용] 원본 함수 내부 로직 유지하되 실시간 렌더링되게 처리
+    // 모험 일지 렌더링
     function renderStatusContent() {
         const eventList = document.getElementById('event-list-modal');
         eventList.innerHTML = currentEvents.length > 0 
@@ -377,24 +496,21 @@ function animateDice(finalValue) {
         }
     }
 
-    // 인벤토리 화면 업데이트
+    // 인벤토리 렌더링
     function renderInventoryContent() {
         const list = document.getElementById('inventory-list-modal');
         list.innerHTML = currentInventory.length > 0 
-            ? currentInventory.map(item => `<li style="background:#fff; padding:8px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">⚔️ ${item}</li>`).join('') 
+            ? currentInventory.map(item => `<li style="background:#fff; padding:6px 8px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.1); margin-bottom:6px;">⚔️ ${item}</li>`).join('') 
             : "<li style='color:#777'>비어 있음</li>";
     }
 
-    // 사이드 패널 업데이트 (send 통신 완료 후 자동 호출용)
+    // 모든 패널 한 번에 업데이트 (상태창 포함)
     function updateAllPanels() {
         renderStatusContent();
         renderInventoryContent();
         renderMapContent();
+        renderStatusWindowUI(); // 상태창 업데이트 추가
     }
-
-    // 모달 토글 함수 원형 (이제 버튼이 없지만 에러 방지용으로 유지)
-    function toggleStatusModal() { renderStatusContent(); }
-    function toggleInventoryModal() { renderInventoryContent(); }
 
     window.onload = async () => {
         const urlParts = window.location.pathname.split('/');
@@ -417,18 +533,23 @@ function animateDice(finalValue) {
             currentEvents = data.questLines || [];
             currentQuests = data.quests || {}; 
             currentInventory = data.inventory || [];
+            if (data.currentLocation) currentLocation = data.currentLocation;
+            if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
+
+            // 저장된 캐릭터 상태 불러오기
+            if (data.hp !== undefined) currentHp = data.hp;
+            if (data.maxHp !== undefined) maxHp = data.maxHp;
+            if (data.gold !== undefined) currentGold = data.gold;
+            if (data.skills) currentSkills = data.skills;
+            if (data.playerImageUrl) updatePlayerImageUI(data.playerImageUrl);
             
-            updateQuestUI(data.questLines);
-            updateAllPanels(); // 로드 직후 3분할 화면 채우기
+            updateAllPanels(); 
         } catch (err) {
             console.error("시나리오 정보 로드 실패", err);
         }
     }
 
     function addMessage(sender, text, isImage = false) {
-        const chatWindow = document.getElementById('chat-window');
-        if (!chatWindow) return;
-
         const div = document.createElement('div');
         div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
         
@@ -449,9 +570,6 @@ function animateDice(finalValue) {
             if (!response.ok) throw new Error('네트워크 응답 오류');
             
             const history = await response.json();
-            console.log("📦 서버에서 받은 원본 데이터:", history);
-
-            const chatWindow = document.getElementById('chat-window');
             chatWindow.innerHTML = ''; 
 
             if (history && history.length > 0) {
@@ -459,11 +577,9 @@ function animateDice(finalValue) {
                     const isUser = msg.role === 'user' || msg.role === 'player';
                     const senderName = isUser ? '나' : '마스터';
                     const content = msg.content || "내용이 없는 메시지입니다.";
-
                     const isImg = content.startsWith('http') || content.startsWith('data:image');
                     addMessage(senderName, content, isImg);
                 });
-                console.log(`✅ ${history.length}개의 메시지를 모두 화면에 그렸습니다.`);
             } else {
                 start(); 
             }
@@ -498,22 +614,24 @@ function animateDice(finalValue) {
                 const data = await response.json(); 
                 hideLoading();
 
-                if (data.diceValue) {
-                animateDice(data.diceValue);
-            }
+                if (data.diceValue) animateDice(data.diceValue);
                 
                 addMessage("마스터", data.reply);
+                
+                // 각종 정보 최신화
                 currentEvents = data.questLines || [];
                 currentQuests = data.quests || {};
                 currentInventory = data.inventory || [];
                 if (data.currentLocation) currentLocation = data.currentLocation;
                 if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
+
+                // 💡 AI가 상태 변화(체력 감소, 골드 획득 등)를 넘겨주면 반영
+                if (data.hp !== undefined) currentHp = data.hp;
+                if (data.maxHp !== undefined) maxHp = data.maxHp;
+                if (data.gold !== undefined) currentGold = data.gold;
+                if (data.skills) currentSkills = data.skills;
                 
-                if (data.questLines) {
-                    updateQuestUI(data.questLines);
-                }
-                
-                updateAllPanels(); // 채팅 치고 나면 즉시 좌우 패널 최신화
+                updateAllPanels();
             } else {
                 hideLoading();
                 addMessage("시스템", "마스터가 응답하지 않습니다.");
@@ -522,24 +640,6 @@ function animateDice(finalValue) {
             hideLoading();
             console.error("❌ 통신 에러:", err);
             addMessage("시스템", "연결 에러가 발생했습니다.");
-        }
-    }
-
-    function updateQuestUI(questLines) {
-        const questList = document.getElementById('quest-list');
-        if (!questList) return;
-        questList.innerHTML = ""; 
-        
-        if (questLines && questLines.length > 0) {
-            questLines.forEach(quest => {
-                const li = document.createElement('li');
-                li.style.padding = "8px 0";
-                li.style.borderBottom = "1px solid #ccc";
-                li.innerHTML = `📍 ${quest}`;
-                questList.appendChild(li);
-            });
-        } else {
-            questList.innerHTML = "<li style='color: #666;'>기록된 사건이 없습니다.</li>";
         }
     }
 
@@ -580,7 +680,6 @@ function animateDice(finalValue) {
             alert("아직 요약된 주요 사건이 없어 그림을 그릴 수 없습니다!");
             return;
         }
-
         showLoading(); 
         try {
             const response = await fetch('/api/generate-image', {
@@ -592,7 +691,6 @@ function animateDice(finalValue) {
             if (response.ok) {
                 const data = await response.json(); 
                 const imageUrl = data.imageUrl || data.url; 
-
                 hideLoading();
                 addMessage("마스터", imageUrl, true);
 
@@ -615,29 +713,19 @@ function animateDice(finalValue) {
         }
     }
 
-// 일지 모달 제어 함수
     function openJournal() {
         document.getElementById('journal-modal').style.display = 'flex';
-        renderStatusContent(); // 창을 열 때 내용을 최신으로 그립니다.
+        renderStatusContent();
     }
-
     function closeJournal() {
         document.getElementById('journal-modal').style.display = 'none';
     }
-
-    // 버튼에 클릭 이벤트 연결 (window.onload 안에 넣거나 스크립트 하단에 추가)
     document.getElementById('open-journal-btn').addEventListener('click', openJournal);
-
-    // [중요!] 기존 renderStatusContent 함수는 그대로 유지하되, 
-    // 이제 모달 안에 있는 ID들을 업데이트하므로 수정할 필요가 없습니다.
-
-
 
 </script>
 
 <div id="journal-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
-    <div style="background: var(--bg-beige); width: 85%; max-width: 900px; height: 80vh; border-radius: 12px; border: 4px solid var(--accent-blue-gray); display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5); position: relative;">
-        
+    <div style="background: var(--bg-beige); width: 85%; max-width: 900px; height: 80vh; border-radius: 12px; border: 4px solid var(--accent-blue-gray); display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--accent-blue-gray); padding-bottom: 15px; margin-bottom: 20px;">
                 <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">📖 모험 일지 (Adventure Journal)</h2>
                 <button onclick="closeJournal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
@@ -655,10 +743,38 @@ function animateDice(finalValue) {
                     <h3 style="color: #333; border-left: 5px solid var(--accent-blue-gray); padding-left: 10px;">🎯 진행 중인 퀘스트</h3>
                     <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--bg-light-gray); padding: 15px; border-radius: 8px;">
                         <div id="quest-list-modal"></div>
-                        <ul id="quest-list" style="display: none;"></ul>
                     </div>
                 </div>
             </div>
+    </div>
+</div>
+
+<div id="skill-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
+    <div style="background: var(--bg-beige); width: 80%; max-width: 500px; max-height: 70vh; border-radius: 12px; border: 4px solid var(--accent-blue-gray); display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--accent-blue-gray); padding-bottom: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">✨ 보유 스킬 및 특성</h2>
+            <button onclick="closeSkillModal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
+        </div>
+
+        <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--white); padding: 15px; border-radius: 8px; border: 2px solid var(--accent-blue-gray);">
+            <ul id="skill-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold;">
+                </ul>
+        </div>
+    </div>
+</div>
+<div id="inventory-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
+    <div style="background: var(--bg-beige); width: 80%; max-width: 400px; max-height: 70vh; border-radius: 12px; border: 4px solid #8D6E63; display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #8D6E63; padding-bottom: 15px; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">🎒 소지품 가방</h2>
+            <button onclick="closeInventoryModal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
+        </div>
+
+        <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--white); padding: 15px; border-radius: 8px; border: 2px solid #8D6E63;">
+            <ul id="inventory-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
+                </ul>
+        </div>
     </div>
 </div>
 

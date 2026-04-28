@@ -534,7 +534,7 @@ app.post('/api/generate-player-image', async (req, res) => {
 
         // ✅ 2. 주인공 설정을 바탕으로 프롬프트 조립
         const characterInfo = scenario.characterInfo;
-        const imagePrompt = `다음 캐릭터 설정을 바탕으로 다크 판타지 TRPG 게임의 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 설정: ${characterInfo}`;
+        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 애니메 스타일로 1장 그려줘. 설정: ${characterInfo}`;
 
         console.log(`\n================ [🖼️ 플레이어 사진 생성 요청] ================`);
         console.log(`요청 프롬프트: ${imagePrompt}`);

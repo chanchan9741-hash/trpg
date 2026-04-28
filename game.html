@@ -389,6 +389,7 @@ function animateDice(finalValue) {
     function updateAllPanels() {
         renderStatusContent();
         renderInventoryContent();
+        renderMapContent();
     }
 
     // 모달 토글 함수 원형 (이제 버튼이 없지만 에러 방지용으로 유지)
@@ -505,6 +506,8 @@ function animateDice(finalValue) {
                 currentEvents = data.questLines || [];
                 currentQuests = data.quests || {};
                 currentInventory = data.inventory || [];
+                if (data.currentLocation) currentLocation = data.currentLocation;
+                if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
                 
                 if (data.questLines) {
                     updateQuestUI(data.questLines);

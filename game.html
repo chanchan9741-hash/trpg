@@ -317,7 +317,7 @@
     
     let currentEvents = [];
     let currentQuests = {};
-    let currentInventory = [];
+    let currentInventory = {};
     let currentLocation = "알 수 없음";
     let discoveredLocations = [];
 
@@ -383,8 +383,18 @@
         const list = document.getElementById('inventory-list-modal');
         if(!list) return;
         
-        list.innerHTML = currentInventory.length > 0 
-            ? currentInventory.map(item => `<li style="background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; align-items:center; gap:8px;">🗡️ ${item}</li>`).join('') 
+        // 객체 { "포션": 3, "검": 1 } 를 배열 [ ["포션", 3], ["검", 1] ] 로 변환
+        const invEntries = Object.entries(currentInventory);
+        
+        list.innerHTML = invEntries.length > 0 
+            ? invEntries.map(([name, count]) => `
+                <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
+                    <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                        ${count}개
+                    </span>
+                </li>
+            `).join('') 
             : "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
     }
 
@@ -499,11 +509,29 @@
     // 인벤토리 렌더링
     function renderInventoryContent() {
         const list = document.getElementById('inventory-list-modal');
-        list.innerHTML = currentInventory.length > 0 
-            ? currentInventory.map(item => `<li style="background:#fff; padding:6px 8px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.1); margin-bottom:6px;">⚔️ ${item}</li>`).join('') 
-            : "<li style='color:#777'>비어 있음</li>";
-    }
+        if(!list) return;
+        
+        // 🔍 F12(개발자 도구) 콘솔창에서 가방에 데이터가 잘 왔는지 확인!
+        console.log("🎒 현재 가방 데이터:", currentInventory); 
+        
+        if (Array.isArray(currentInventory)) {
+            list.innerHTML = "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>새로운 가방 업데이트 중... [대화 초기화]를 눌러 리셋해 주세요!</li>";
+            return;
+        }
 
+        const invEntries = Object.entries(currentInventory || {});
+        
+        list.innerHTML = invEntries.length > 0 
+            ? invEntries.map(([name, count]) => `
+                <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
+                    <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                        ${count}개
+                    </span>
+                </li>
+            `).join('') 
+            : "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
+    }
     // 모든 패널 한 번에 업데이트 (상태창 포함)
     function updateAllPanels() {
         renderStatusContent();
@@ -532,7 +560,7 @@
             
             currentEvents = data.questLines || [];
             currentQuests = data.quests || {}; 
-            currentInventory = data.inventory || [];
+            currentInventory = data.inventory || {};
             if (data.currentLocation) currentLocation = data.currentLocation;
             if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
 
@@ -621,7 +649,7 @@
                 // 각종 정보 최신화
                 currentEvents = data.questLines || [];
                 currentQuests = data.quests || {};
-                currentInventory = data.inventory || [];
+                currentInventory = data.inventory || {};
                 if (data.currentLocation) currentLocation = data.currentLocation;
                 if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
 

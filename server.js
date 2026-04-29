@@ -34,7 +34,7 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     characterInfo: String,
     questLines: [String],
     quests: { type: Map, of: String, default: {} },
-    inventory: { type: [String], default: [] }, // 아이템 리스트 추가
+    inventory: { type: Map, of: Number, default: {} }, // 아이템 리스트 추가
     currentLocation: { type: String, default: '시작 지점' },
     discoveredLocations: { type: [String], default: ['시작 지점'] },
     hp: { type: Number, default: 100 },
@@ -135,8 +135,18 @@ app.get('/api/scenario/:id', async (req, res) => {
     try {
         const scenario = await Scenario.findById(req.params.id);
         if (!scenario) return res.status(404).send("시나리오를 찾을 수 없습니다.");
-        res.json(scenario); // 여기서 JSON을 정확히 보내줘야 에러가 안 납니다!
+
+        // 💡 몽고DB의 Map 데이터를 일반적인 { key: value } 객체로 변환해서 보냅니다.
+        const scenarioData = scenario.toObject(); // 먼저 전체 데이터를 일반 객체로 변환
+        
+        res.json({
+            ...scenarioData,
+            quests: scenario.quests ? Object.fromEntries(scenario.quests.entries()) : {},
+            inventory: scenario.inventory ? Object.fromEntries(scenario.inventory.entries()) : {},
+            playerImageUrl: scenario.playerImageUrl || null
+        });
     } catch (err) {
+        console.error("시나리오 로드 에러:", err);
         res.status(500).send(err.message);
     }
 });
@@ -188,6 +198,11 @@ app.post('/api/chat', async (req, res) => {
             ? Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ') 
             : "없음";
         
+        let invEntries = Array.from(scenario.inventory.entries());
+        let currentInvString = invEntries.length > 0 
+            ? invEntries.map(([k, v]) => `${k}(${v}개)`).join(', ') 
+            : "비어 있음";
+        
         const statusSnapshot = `
             [현재 상황 요약]
             - 세계관: ${scenario.worldSetting}
@@ -196,7 +211,7 @@ app.post('/api/chat', async (req, res) => {
             - 현재 위치: ${scenario.currentLocation || '시작 지점'}
             - 발견한 지역: ${scenario.discoveredLocations && scenario.discoveredLocations.length > 0 ? scenario.discoveredLocations.join(', ') : '없음'}
             - 진행중인 퀘스트: ${currentQuests}
-            - 보유 아이템: ${scenario.inventory.join(', ') || '없음'}
+            - 보유 아이템: ${currentInvString}
             - 체력: ${scenario.hp || 100} / ${scenario.maxHp || 100}
             - 금화: ${scenario.gold || 0} G
             - 보유 스킬: ${(scenario.skills || ['기본 공격']).join(', ')}`;
@@ -208,7 +223,8 @@ app.post('/api/chat', async (req, res) => {
         [시스템 태그 사용법 - 변화가 있을 때만 대답 맨 끝에 추가하세요]
         - 퀘스트 생성/변동: [퀘스트: 이름 | 내용]
         - 퀘스트 완료: [완료: 퀘스트이름]
-        - 아이템 획득: [아이템: 아이템명]
+        - 아이템 획득 시: [아이템획득: 아이템명|수량] (예: 포션 2개 획득 -> [아이템획득: 체력 포션|2])
+        - 아이템 소모/사용 시: [아이템소모: 아이템명|수량] (예: 포션 1개 사용 -> [아이템소모: 체력 포션|1])
         - 장소 이동: [이동: 새로운 장소명]
         - 체력 증감 시: [체력: 남은체력숫자] (예: 플레이어가 맞아 체력이 80이 되면 [체력: 80])
         - 최대 체력 증가 시: [최대체력: 숫자] (예: 레벨업 시 [최대체력: 120])
@@ -244,6 +260,7 @@ app.post('/api/chat', async (req, res) => {
 
         console.log("\n================ [🤖 AI 호출 프롬프트] ================");
         console.log(`순번: ${messageCount + 1} / 주사위: ${diceRoll || '없음'} / 요약요청: ${shouldSummarize}`);
+        console.log(finalMessages);
 
         // 7. AI 호출
         const targetModel = model || "gpt-4o-mini";
@@ -268,15 +285,39 @@ app.post('/api/chat', async (req, res) => {
         const questMatches = Array.from(rawReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g));
         const eventMatch = rawReply.match(/\[요약: (.*?)\]/);
         const completedMatches = Array.from(rawReply.matchAll(/\[완료: (.*?)\]/g));
-        const itemMatch = rawReply.match(/\[아이템: (.*?)\]/);
         const locationMatch = rawReply.match(/\[이동: (.*?)\]/);
         
         const hpMatch = rawReply.match(/\[체력:\s*(\d+)\]/);
         const maxHpMatch = rawReply.match(/\[최대체력:\s*(\d+)\]/);
         const goldMatch = rawReply.match(/\[금화:\s*(\d+)\]/);
         const skillMatch = rawReply.match(/\[스킬추가:\s*(.*?)\]/);
+        const itemGetMatches = Array.from(rawReply.matchAll(/\[(?:아이템획득|아이템):\s*(.*?)(?:\|(\d+))?\]/g));
+        const itemRemoveMatches = Array.from(rawReply.matchAll(/\[아이템소모:\s*(.*?)(?:\|(\d+))?\]/g));
 
         let isUpdated = false;
+
+        itemGetMatches.forEach(m => {
+            const name = m[1].trim(); // 💡 수정됨: m[2]가 아니라 m[1]이 이름입니다!
+            const count = m[2] ? parseInt(m[2], 10) : 1; // 💡 수정됨: m[3]이 아니라 m[2]가 개수입니다!
+            const currentCount = scenario.inventory.get(name) || 0;
+            scenario.inventory.set(name, currentCount + count);
+            isUpdated = true;
+        });
+
+
+        itemRemoveMatches.forEach(m => {
+            const name = m[1].trim(); // 💡 여기도 m[1]로 수정
+            const count = m[2] ? parseInt(m[2], 10) : 1; // 💡 여기도 m[2]로 수정
+            const currentCount = scenario.inventory.get(name) || 0;
+            const newCount = currentCount - count;
+
+            if (newCount <= 0) {
+                scenario.inventory.delete(name); 
+            } else {
+                scenario.inventory.set(name, newCount); 
+            }
+            isUpdated = true;
+        });
 
         if (locationMatch) {
             const newLocation = locationMatch[1].trim();
@@ -288,13 +329,6 @@ app.post('/api/chat', async (req, res) => {
             isUpdated = true;
         }
 
-        if (itemMatch) {
-            const newItem = itemMatch[1].trim();
-            if (!scenario.inventory.includes(newItem)) {
-                scenario.inventory.push(newItem);
-                isUpdated = true;
-            }
-        }
 
         // --- 새로 추가된 상태창 업데이트 로직 ---
         if (hpMatch) {
@@ -358,15 +392,15 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // 11. 클라이언트에 보낼 때 시스템 태그 싹 다 지우기 (정규식 업데이트)
-        const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|이동|체력|최대체력|금화|스킬추가): .*?\]/g, "").trim();
+        const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|이동|체력|최대체력|금화|스킬추가): .*?\]/g, "").trim();
         
         // 💡 에러났던 부분 수정 완료! (discoveredLocations 뒤에 쉼표 추가)
         return res.json({ 
             reply: cleanReply, 
             diceValue: diceRoll,
             questLines: scenario.questLines,
-            quests: Object.fromEntries(scenario.quests),
-            inventory: scenario.inventory,
+            qquests: scenario.quests ? Object.fromEntries(scenario.quests.entries()) : {},
+            inventory: scenario.inventory ? Object.fromEntries(scenario.inventory.entries()) : {},
             currentLocation: scenario.currentLocation, 
             discoveredLocations: scenario.discoveredLocations, 
             hp: scenario.hp !== undefined ? scenario.hp : 100,
@@ -417,7 +451,7 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
             $set: { 
                 questLines: [], 
                 quests: {}, 
-                inventory: [],
+                inventory: {},
                 hp: 100,                     // 체력 100으로 리셋
                 maxHp: 100,                  // 최대 체력도 100으로 리셋
                 gold: 0,                     // 금화 0으로 탕진
@@ -552,6 +586,7 @@ app.post('/api/generate-player-image', async (req, res) => {
             body: JSON.stringify({
                 "model": "gpt-image-1.5", // 성공했던 모델명 그대로 사용
                 "prompt": imagePrompt,
+                
                 "response_format": "url"
             })
         });

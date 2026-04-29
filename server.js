@@ -435,6 +435,8 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
 
 app.post('/api/generate-image', async (req, res) => {
     try {
+        
+        
         const { scenarioId } = req.body;
         const scenario = await Scenario.findById(scenarioId);
         if (!scenario) return res.status(404).send("시나리오 없음");
@@ -445,13 +447,14 @@ app.post('/api/generate-image', async (req, res) => {
 
         // ✅ 2. [풍부한 프롬프트 조립]
         // 세계관 배경 정보(worldSetting)와 지금까지의 주요 사건들(questLines)을 합칩니다.
+        const characterInfo = scenario.characterInfo;
         const worldContext = scenario.worldSetting; 
         const recentEvents = scenario.questLines.length > 0 
             ? scenario.questLines.slice(-3).join('. ') // 최근 3개 사건만 가져와서 문맥 연결
             : "모험이 막 시작된 상황";
 
         // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
-        const richPrompt = `배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 삽화를 그려줘.`;
+        const richPrompt = `캐릭터 설정 : ${characterInfo}배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 삽화를 아니메 스타일로 그려줘.`;
 
         console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
 
@@ -463,7 +466,7 @@ app.post('/api/generate-image', async (req, res) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                "model": "gemini-2.5-flash-image",
+                "model": "gpt-image-1.5",
                 "prompt": richPrompt, // 👈 배경과 사건이 합쳐진 풍부한 묘사문
                 "response_format": "url"
             })
@@ -547,7 +550,7 @@ app.post('/api/generate-player-image', async (req, res) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                "model": "gemini-2.5-flash-image", // 성공했던 모델명 그대로 사용
+                "model": "gpt-image-1.5", // 성공했던 모델명 그대로 사용
                 "prompt": imagePrompt,
                 "response_format": "url"
             })

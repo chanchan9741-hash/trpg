@@ -22,18 +22,38 @@
         
         <label>나의 캐릭터 정보</label>
         <textarea id="charInfo" rows="3" placeholder="이름, 직업, 특징 등..."></textarea>
+
+        <div class="form-group">
+    <label for="appearance">캐릭터 외형 묘사 👤</label>
+    <textarea id="appearance" placeholder="예: 은발의 긴 머리, 붉은 눈동자, 낡은 검은색 가죽 갑옷을 입고 있는 날카로운 인상의 전사" required></textarea>
+</div>
+
+<div class="form-group">
+    <label for="artStyle">초상화 화풍 (그림 스타일) 🎨</label>
+    <select id="artStyle" required>
+        <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
+        <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
+        <option value="수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채">애니메이션 스타일</option>
+        <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화</option>
+        <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
+    </select>
+</div>
+
+
         
         <button onclick="submitScenario()">모험 시작하기</button>
     </div>
 
     <script>
         async function submitScenario() {
-            const data = {
+               const data = {
                 title: document.getElementById('title').value,
                 worldSetting: document.getElementById('worldSetting').value,
-                characterInfo: document.getElementById('charInfo').value
+                characterInfo: document.getElementById('charInfo').value,
+                appearance: document.getElementById('appearance').value,  // 👈 처음에 같이 선언!
+                artStyle: document.getElementById('artStyle').value       // 👈 처음에 같이 선언!
             };
-
+            
             const response = await fetch('/api/scenarios', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

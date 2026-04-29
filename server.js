@@ -43,6 +43,8 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     skills: { type: [String], default: ['기본 공격'] },
     playerImageUrl: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
+    appearance: { type: String, default: "" },                                   // 👈 추가
+    artStyle: { type: String, default: "고품질의 다크 판타지 유화 스타일, 걸작" }, // 👈 추가
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -100,6 +102,13 @@ passport.deserializeUser(async (id, done) => {
 // 6. 페이지 라우트
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 app.get('/create', (req, res) => req.user ? res.sendFile(__dirname + '/create.html') : res.redirect('/auth/google'));
+// ✅ 시나리오 수정 전용 페이지 접속
+app.get('/edit/:id', (req, res) => {
+    // 로그인 안 한 유저는 메인으로 돌려보냄
+    if (!req.user) return res.redirect('/');
+    // edit.html 파일 전송
+    res.sendFile(__dirname + '/edit.html'); 
+});
 app.get('/game/:id', (req, res) => req.user ? res.sendFile(__dirname + '/game.html') : res.redirect('/auth/google'));
 
 // 7. API 라우트
@@ -154,11 +163,14 @@ app.get('/api/scenario/:id', async (req, res) => {
 
 app.post('/api/scenarios', async (req, res) => {
     if (!req.user) return res.status(401).send("Unauthorized");
+    
     const newScenario = new Scenario({
         userId: req.user._id,
         title: req.body.title,
         worldSetting: req.body.worldSetting,
-        characterInfo: req.body.characterInfo
+        characterInfo: req.body.characterInfo,
+        appearance: req.body.appearance,  // 👈 추가: 프론트에서 보낸 외형 데이터
+        artStyle: req.body.artStyle       // 👈 추가: 프론트에서 보낸 화풍 데이터
     });
     await newScenario.save();
     res.json({ success: true });
@@ -217,7 +229,7 @@ app.post('/api/chat', async (req, res) => {
             - 보유 스킬: ${(scenario.skills || ['기본 공격']).join(', ')}`;
 
         // 4. 시스템 지시문 (상태창 조작 태그 추가)
-        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 대답하세요.
+        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 존댓말로 대답하세요.
         ${shouldSummarize ? "중요: 현재까지 5턴의 대화가 진행되었습니다. 답변 끝에 [요약: 내용] 내용에 지난 5턴간의 주요 사건을 정리한 문장을 넣어 반드시 추가하세요." : ""}
         
         [시스템 태그 사용법 - 변화가 있을 때만 대답 맨 끝에 추가하세요]
@@ -416,6 +428,31 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+app.put('/api/scenarios/:id', async (req, res) => {
+    try {
+        if (!req.user) return res.status(401).send("Unauthorized");
+
+        // 프론트엔드에서 보낸 5가지 수정 데이터를 받습니다.
+        const { title, worldSetting, characterInfo, appearance, artStyle } = req.body;
+        
+        // 데이터베이스에서 해당 ID를 찾아서 덮어씌웁니다. (본인 시나리오만 수정 가능)
+        const updatedScenario = await Scenario.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user._id }, 
+            { title, worldSetting, characterInfo, appearance, artStyle },
+            { new: true } // 수정된 이후의 결과물을 반환
+        );
+
+        if (!updatedScenario) {
+            return res.status(404).send("시나리오를 찾을 수 없거나 수정 권한이 없습니다.");
+        }
+
+        res.json({ message: "수정 성공", scenario: updatedScenario });
+    } catch (error) {
+        console.error("시나리오 수정 에러:", error);
+        res.status(500).send("서버 오류가 발생했습니다.");
+    }
+});
+
 
 // [추가] 시나리오의 대화 로그 초기화(삭제) API
 // server.js의 삭제 API
@@ -488,8 +525,14 @@ app.post('/api/generate-image', async (req, res) => {
             : "모험이 막 시작된 상황";
 
         // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
-        const richPrompt = `캐릭터 설정 : ${characterInfo}배경 세계관: ${worldContext}. 현재 벌어지고 있는 구체적인 상황: ${recentEvents}. 위 상황을 묘사하는 삽화를 아니메 스타일로 그려줘.`;
-
+        const richPrompt = `
+        그림 스타일(화풍): ${scenario.artStyle}.
+        캐릭터 외형: ${scenario.appearance}.
+        캐릭터 설정: ${characterInfo}
+        배경 세계관: ${worldContext}.
+        현재 상황: ${recentEvents}.
+        위의 '그림 스타일(화풍)'과 '캐릭터 외형'을 반드시 최우선으로 지켜서, 현재 상황에 맞는 삽화 1장을 그려주세요.
+        `;
         console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
 
         // ✅ 3. 학교 API 규격에 맞춰 전송
@@ -571,7 +614,8 @@ app.post('/api/generate-player-image', async (req, res) => {
 
         // ✅ 2. 주인공 설정을 바탕으로 프롬프트 조립
         const characterInfo = scenario.characterInfo;
-        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 애니메 스타일로 1장 그려줘. 설정: ${characterInfo}`;
+        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 애니메 스타일로 1장 그려줘. 설정: ${characterInfo}        그림 스타일(화풍): ${scenario.artStyle}.
+        캐릭터 외형: ${scenario.appearance}.`;
 
         console.log(`\n================ [🖼️ 플레이어 사진 생성 요청] ================`);
         console.log(`요청 프롬프트: ${imagePrompt}`);

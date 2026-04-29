@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시나리오 수정 - Gemini TRPG</title>
+    <style>
+        :root { --bg-dark-brown: #3E2723; --bg-beige: #F5F5DC; --accent-blue-gray: #607D8B; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg-dark-brown); color: var(--bg-beige); margin: 0; padding: 2rem 5%; }
+        .container { max-width: 800px; margin: 0 auto; background: rgba(0,0,0,0.5); padding: 30px; border-radius: 12px; border: 2px solid var(--accent-blue-gray); }
+        h1 { border-bottom: 2px solid var(--accent-blue-gray); padding-bottom: 10px; margin-top: 0; }
+        label { font-weight: bold; margin-top: 15px; display: block; }
+        input, textarea, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; box-sizing: border-box; }
+        textarea { height: 150px; resize: vertical; }
+        .btn { padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1.1rem; width: 100%; margin-top: 20px; transition: 0.2s; }
+        .btn-primary { background-color: var(--accent-blue-gray); color: white; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-2px); }
+        .back-btn { background: none; color: var(--bg-beige); border: 1px solid var(--bg-beige); padding: 8px 15px; cursor: pointer; margin-bottom: 20px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <button class="back-btn" onclick="location.href='/'">⬅ 메인으로 돌아가기</button>
+
+    <div class="container">
+        <h1>시나리오 수정 ✍️</h1>
+        
+        <label>시나리오 제목</label>
+        <input type="text" id="title" required>
+
+        <label>세계관 배경 설정</label>
+        <textarea id="worldSetting" required></textarea>
+
+        <label>나의 캐릭터 정보 (직업, 성격 등)</label>
+        <textarea id="characterInfo" required></textarea>
+
+        <label>캐릭터 외형 묘사 👤</label>
+        <textarea id="appearance" style="height: 100px;"></textarea>
+
+        <label>초상화 화풍 (그림 스타일) 🎨</label>
+        <select id="editArtStyle">
+            <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
+            <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
+            <option value="수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채">애니메이션 스타일</option>
+            <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화</option>
+            <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
+        </select>
+
+        <button class="btn btn-primary" onclick="submitEdit()">수정 완료 및 저장</button>
+    </div>
+
+    <script>
+        // 주소창에서 ID 빼오기 (예: /edit/12345 -> 12345)
+        const scenarioId = window.location.pathname.split('/').pop();
+
+        // 1. 페이지 켜지자마자 기존 데이터 불러와서 채우기
+        window.onload = async () => {
+            try {
+                // (주의) 시나리오 하나 불러오는 API 주소가 맞는지 확인 (보통 /api/scenario/:id 형태)
+                const response = await fetch(`/api/scenario/${scenarioId}`);
+                if (!response.ok) throw new Error("불러오기 실패");
+                
+                const data = await response.json();
+                
+                // 칸에 데이터 채워넣기
+                document.getElementById('title').value = data.title || '';
+                document.getElementById('worldSetting').value = data.worldSetting || '';
+                document.getElementById('characterInfo').value = data.characterInfo || '';
+                document.getElementById('appearance').value = data.appearance || '';
+                if(data.artStyle) document.getElementById('editArtStyle').value = data.artStyle;
+
+            } catch (err) {
+                alert("시나리오 정보를 불러오지 못했습니다.");
+                location.href = '/';
+            }
+        };
+
+        // 2. 수정한 데이터 서버로 쏴서 저장하기
+        async function submitEdit() {
+            const updatedData = {
+                title: document.getElementById('title').value,
+                worldSetting: document.getElementById('worldSetting').value,
+                characterInfo: document.getElementById('characterInfo').value,
+                appearance: document.getElementById('appearance').value,
+                artStyle: document.getElementById('editArtStyle').value
+            };
+
+            try {
+                const response = await fetch(`/api/scenarios/${scenarioId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+
+                if (response.ok) {
+                    alert('시나리오가 성공적으로 수정되었습니다! ✨');
+                    location.href = '/'; // 수정 완료 후 메인 화면으로 복귀
+                } else {
+                    alert('수정에 실패했습니다.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('수정 중 에러가 발생했습니다.');
+            }
+        }
+    </script>
+</body>
+</html>

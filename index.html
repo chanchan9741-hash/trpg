@@ -143,6 +143,30 @@
         .btn-primary { background-color: var(--accent-blue-gray); color: white; border: 1px solid var(--white); }
         .btn-outline { background-color: var(--white); border: 2px solid var(--accent-blue-gray); color: var(--accent-blue-gray); }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+        /* 기존 삭제 버튼 아래에 추가 */
+        .edit-btn {
+            position: absolute;
+            top: 15px;
+            right: 55px; /* 삭제 버튼 왼쪽에 배치 */
+            width: 32px;
+            height: 32px;
+            background-color: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            border: 1px solid #28a745;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            transition: 0.2s;
+        }
+
+        .edit-btn:hover {
+            background-color: #28a745;
+            color: white;
+            transform: scale(1.1);
+        }
 
         #scenario-list-empty {
             text-align: center;
@@ -180,7 +204,59 @@
         </div>
     </main>
 
+ <div id="editOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:999;"></div>
+    
+    <div id="editModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:var(--bg-dark-brown); padding:30px; border:2px solid var(--accent-blue-gray); border-radius: 8px; z-index:1000; color:var(--bg-beige); width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
+        <h3 style="margin-top: 0; border-bottom: 1px solid var(--accent-blue-gray); padding-bottom: 10px;">시나리오 수정 ✍️</h3>
+        <input type="hidden" id="editScenarioId">
+        
+        <div style="margin-bottom: 15px;">
+            <label>제목</label><br>
+            <input type="text" id="editTitle" style="width:100%; padding:10px; border-radius:4px; border:1px solid #555; background:#222; color:white; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>세계관</label><br>
+            <textarea id="editWorldSetting" style="width:100%; padding:10px; border-radius:4px; border:1px solid #555; background:#222; color:white; height: 150px; box-sizing:border-box; resize: none;"></textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>캐릭터 정보</label><br>
+            <textarea id="editCharacterInfo" style="width:100%; padding:10px; border-radius:4px; border:1px solid #555; background:#222; color:white; height: 150px; box-sizing:border-box; resize: none;"></textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>외형 묘사</label><br>
+            <textarea id="editAppearance" style="width:100%; padding:10px; border-radius:4px; border:1px solid #555; background:#222; color:white; height: 100px; box-sizing:border-box; resize: none;"></textarea>
+        </div>
+        <div style="margin-bottom: 25px;">
+            <label>초상화 화풍</label><br>
+            <select id="editArtStyle" style="width:100%; padding:10px; border-radius:4px; border:1px solid #555; background:#222; color:white; box-sizing:border-box;">
+                <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
+                <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
+                <option value="수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채">애니메이션 스타일</option>
+                <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화</option>
+                <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
+            </select>
+        </div>
+        
+        <div style="text-align: right; gap: 10px; display: flex; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeEditModal()">취소</button>
+            <button class="btn btn-primary" onclick="submitEdit()">저장</button>
+        </div>
+    </div>
+        
+        <div style="text-align: right; gap: 10px; display: flex; justify-content: flex-end;">
+            <button class="btn btn-outline" onclick="closeEditModal()">취소</button>
+            <button class="btn btn-primary" onclick="submitEdit()">저장</button>
+        </div>
+    </div>
+
+    
+
+    
+
     <script>
+
+
+        let currentScenarios = [];
         // 페이지 로드 시 사용자 상태 확인
         window.onload = async () => {
             try {
@@ -217,6 +293,7 @@
             try {
                 const response = await fetch('/api/my-scenarios');
                 const scenarios = await response.json();
+                currentScenarios = scenarios;
 
                 if (scenarios.length > 0) {
                     grid.innerHTML = ''; 
@@ -229,6 +306,9 @@
                         card.innerHTML = `
                             <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')" title="삭제">
                                 <i class="bi bi-trash"></i>
+                            </div>
+                            <div class="edit-btn" onclick="openEditModal(event, '${s._id}')" title="수정">
+                                <i class="bi bi-pencil"></i>
                             </div>
                             <h3>${s.title}</h3>
                             <p>${s.worldSetting || '설명이 없습니다.'}</p>
@@ -278,6 +358,59 @@
             } catch (err) {
                 console.error("삭제 중 오류 발생:", err);
                 alert("서버 통신 오류가 발생했습니다.");
+            }
+        }
+function openEditModal(event, id) {
+            event.stopPropagation(); // 카드 클릭해서 게임에 입장해버리는 현상 방지
+
+            const scenario = currentScenarios.find(s => s._id === id);
+            if (!scenario) return alert("시나리오 정보를 찾을 수 없습니다.");
+
+            document.getElementById('editScenarioId').value = scenario._id;
+            document.getElementById('editTitle').value = scenario.title || '';
+            document.getElementById('editWorldSetting').value = scenario.worldSetting || '';
+            document.getElementById('editCharacterInfo').value = scenario.characterInfo || '';
+            document.getElementById('editAppearance').value = scenario.appearance || '';
+            document.getElementById('editArtStyle').value = scenario.artStyle || '고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작';
+
+            document.getElementById('editModal').style.display = 'block';
+            document.getElementById('editOverlay').style.display = 'block';
+        }
+
+        // ✅ 수정 팝업창 닫기
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            document.getElementById('editOverlay').style.display = 'none';
+        }
+
+        // ✅ 서버에 수정 요청 보내기
+        async function submitEdit() {
+            const id = document.getElementById('editScenarioId').value;
+            const data = {
+                title: document.getElementById('editTitle').value,
+                worldSetting: document.getElementById('editWorldSetting').value,
+                characterInfo: document.getElementById('editCharacterInfo').value,
+                appearance: document.getElementById('editAppearance').value,
+                artStyle: document.getElementById('editArtStyle').value
+            };
+
+            try {
+                const response = await fetch(`/api/scenarios/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('시나리오가 성공적으로 수정되었습니다! ✨');
+                    closeEditModal();
+                    loadMyScenarios(); // 페이지 새로고침 없이 시나리오 목록만 다시 그리기!
+                } else {
+                    alert('수정에 실패했습니다.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('수정 중 에러가 발생했습니다.');
             }
         }
     </script>

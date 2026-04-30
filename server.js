@@ -42,6 +42,7 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     gold: { type: Number, default: 0 },
     skills: { type: [String], default: ['기본 공격'] },
     playerImageUrl: { type: String, default: null },
+    equipment: { type: Map, of: String, default: { "무기": "없음", "방어구": "없음", "장신구": "없음" } },
     createdAt: { type: Date, default: Date.now },
     appearance: { type: String, default: "" },                                   // 👈 추가
     artStyle: { type: String, default: "고품질의 다크 판타지 유화 스타일, 걸작" }, // 👈 추가
@@ -210,6 +211,11 @@ app.post('/api/chat', async (req, res) => {
             ? Array.from(scenario.quests.entries()).map(([k, v]) => `${k}(${v})`).join(', ') 
             : "없음";
         
+
+        let equipEntries = scenario.equipment 
+            ? Array.from(scenario.equipment.entries()) 
+            : Object.entries({ "무기": "없음", "방어구": "없음", "장신구": "없음" });
+            
         let invEntries = Array.from(scenario.inventory.entries());
         let currentInvString = invEntries.length > 0 
             ? invEntries.map(([k, v]) => `${k}(${v}개)`).join(', ') 
@@ -225,6 +231,7 @@ app.post('/api/chat', async (req, res) => {
             - 진행중인 퀘스트: ${currentQuests}
             - 보유 아이템: ${currentInvString}
             - 체력: ${scenario.hp || 100} / ${scenario.maxHp || 100}
+            - 착용 장비: ${currentEquipString}
             - 금화: ${scenario.gold || 0} G
             - 보유 스킬: ${(scenario.skills || ['기본 공격']).join(', ')}`;
 
@@ -242,6 +249,7 @@ app.post('/api/chat', async (req, res) => {
         - 최대 체력 증가 시: [최대체력: 숫자] (예: 레벨업 시 [최대체력: 120])
         - 금화 획득/소비 시: [금화: 변경된총금화] (예: 50골드를 얻어 총 150이 되면 [금화: 150])
         - 스킬 획득 시: [스킬추가: 스킬명]
+        - 장비 착용/변경 시: [장비착용: 부위|아이템명] (예: 무기에 강철 검을 차면 -> [장비착용: 무기|강철 검])
         `;
 
         const systemMessage = { 
@@ -298,7 +306,7 @@ app.post('/api/chat', async (req, res) => {
         const eventMatch = rawReply.match(/\[요약: (.*?)\]/);
         const completedMatches = Array.from(rawReply.matchAll(/\[완료: (.*?)\]/g));
         const locationMatch = rawReply.match(/\[이동: (.*?)\]/);
-        
+        const equipMatches = Array.from(rawReply.matchAll(/\[장비착용:\s*(.*?)\|?(.*?)\]/g));
         const hpMatch = rawReply.match(/\[체력:\s*(\d+)\]/);
         const maxHpMatch = rawReply.match(/\[최대체력:\s*(\d+)\]/);
         const goldMatch = rawReply.match(/\[금화:\s*(\d+)\]/);
@@ -307,6 +315,15 @@ app.post('/api/chat', async (req, res) => {
         const itemRemoveMatches = Array.from(rawReply.matchAll(/\[아이템소모:\s*(.*?)(?:\|(\d+))?\]/g));
 
         let isUpdated = false;
+
+        equipMatches.forEach(m => {
+            const part = m[1].trim(); // 예: 무기
+            const item = m[2].trim(); // 예: 강철 검
+            scenario.equipment.set(part, item);
+            isUpdated = true;
+        });
+
+
 
         itemGetMatches.forEach(m => {
             const name = m[1].trim(); // 💡 수정됨: m[2]가 아니라 m[1]이 이름입니다!
@@ -393,6 +410,7 @@ app.post('/api/chat', async (req, res) => {
                     quests: scenario.quests, 
                     inventory: scenario.inventory,
                     questLines: scenario.questLines,
+                    equipment: scenario.equipment,
                     currentLocation: scenario.currentLocation,
                     discoveredLocations: scenario.discoveredLocations,
                     hp: scenario.hp,
@@ -404,7 +422,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // 11. 클라이언트에 보낼 때 시스템 태그 싹 다 지우기 (정규식 업데이트)
-        const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|이동|체력|최대체력|금화|스킬추가): .*?\]/g, "").trim();
+        const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|장비착용|이동|체력|최대체력|금화|스킬추가): .*?\]/g, "").trim();
         
         // 💡 에러났던 부분 수정 완료! (discoveredLocations 뒤에 쉼표 추가)
         return res.json({ 
@@ -414,6 +432,7 @@ app.post('/api/chat', async (req, res) => {
             qquests: scenario.quests ? Object.fromEntries(scenario.quests.entries()) : {},
             inventory: scenario.inventory ? Object.fromEntries(scenario.inventory.entries()) : {},
             currentLocation: scenario.currentLocation, 
+            equipment: scenario.equipment ? Object.fromEntries(scenario.equipment.entries()) : { "무기": "없음", "방어구": "없음", "장신구": "없음" },
             discoveredLocations: scenario.discoveredLocations, 
             hp: scenario.hp !== undefined ? scenario.hp : 100,
             maxHp: scenario.maxHp !== undefined ? scenario.maxHp : 100,
@@ -489,12 +508,15 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
                 questLines: [], 
                 quests: {}, 
                 inventory: {},
+                equipment: { "무기": "없음", "방어구": "없음", "장신구": "없음" }, // 👈 추가!
                 hp: 100,                     // 체력 100으로 리셋
                 maxHp: 100,                  // 최대 체력도 100으로 리셋
+                
                 gold: 0,                     // 금화 0으로 탕진
                 skills: ['기본 공격'],         // 스킬 초기화
                 currentLocation: "시작 지점",  // 장소 초기화
                 discoveredLocations: []      // 발견한 지역 초기화
+
             } 
         });
         

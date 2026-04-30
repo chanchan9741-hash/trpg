@@ -320,6 +320,7 @@
     let currentInventory = {};
     let currentLocation = "알 수 없음";
     let discoveredLocations = [];
+    let currentEquipment = { "무기": "없음", "방어구": "없음", "장신구": "없음" };
 
     // 💡 캐릭터 상태 변수 추가
     let currentHp = 100;
@@ -508,30 +509,37 @@
 
     // 인벤토리 렌더링
     function renderInventoryContent() {
-        const list = document.getElementById('inventory-list-modal');
-        if(!list) return;
-        
-        // 🔍 F12(개발자 도구) 콘솔창에서 가방에 데이터가 잘 왔는지 확인!
-        console.log("🎒 현재 가방 데이터:", currentInventory); 
-        
-        if (Array.isArray(currentInventory)) {
-            list.innerHTML = "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>새로운 가방 업데이트 중... [대화 초기화]를 눌러 리셋해 주세요!</li>";
-            return;
+        const invList = document.getElementById('inventory-list-modal');
+        const equipList = document.getElementById('equipment-list-modal');
+
+        // 가방 그리기
+        if(invList) {
+            const invEntries = Object.entries(currentInventory || {});
+            invList.innerHTML = invEntries.length > 0 
+                ? invEntries.map(([name, count]) => `
+                    <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
+                        <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold;">${count}개</span>
+                    </li>
+                `).join('') 
+                : "<li style='color:#777; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
         }
 
-        const invEntries = Object.entries(currentInventory || {});
-        
-        list.innerHTML = invEntries.length > 0 
-            ? invEntries.map(([name, count]) => `
-                <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
-                    <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                        ${count}개
-                    </span>
+        // 장비창 그리기
+        if(equipList) {
+            const equipEntries = Object.entries(currentEquipment || {});
+            equipList.innerHTML = equipEntries.map(([part, item]) => `
+                <li style="background:#fff; padding:12px 15px; border-radius:6px; border:2px solid var(--accent-blue-gray); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:var(--accent-blue-gray); font-size:0.95rem;">[${part}]</span>
+                    <span style="font-weight:bold; color:#333;">${item}</span>
                 </li>
-            `).join('') 
-            : "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
+            `).join('');
+        }
     }
+
+
+
+    
     // 모든 패널 한 번에 업데이트 (상태창 포함)
     function updateAllPanels() {
         renderStatusContent();
@@ -791,17 +799,34 @@
         </div>
     </div>
 </div>
+
+
 <div id="inventory-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
-    <div style="background: var(--bg-beige); width: 80%; max-width: 400px; max-height: 70vh; border-radius: 12px; border: 4px solid #8D6E63; display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+    <div style="background: var(--bg-beige); width: 85%; max-width: 800px; max-height: 75vh; border-radius: 12px; border: 4px solid #8D6E63; display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
         
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #8D6E63; padding-bottom: 15px; margin-bottom: 20px;">
-            <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">🎒 소지품 가방</h2>
+            <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">🎒 소지품 및 장비</h2>
             <button onclick="closeInventoryModal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
         </div>
 
-        <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--white); padding: 15px; border-radius: 8px; border: 2px solid #8D6E63;">
-            <ul id="inventory-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
-                </ul>
+        <div style="flex: 1; display: flex; gap: 20px; overflow: hidden;">
+            
+            <div style="flex: 1; display: flex; flex-direction: column;">
+                <h3 style="margin-top: 0; color: #333; border-left: 4px solid #8D6E63; padding-left: 10px;">📦 내 가방</h3>
+                <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--white); padding: 15px; border-radius: 8px; border: 2px solid #8D6E63;">
+                    <ul id="inventory-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
+                        </ul>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column;">
+                <h3 style="margin-top: 0; color: #333; border-left: 4px solid var(--accent-blue-gray); padding-left: 10px;">🛡️ 착용 중인 장비</h3>
+                <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--bg-light-gray); padding: 15px; border-radius: 8px; border: 2px solid var(--accent-blue-gray);">
+                    <ul id="equipment-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
+                        </ul>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>

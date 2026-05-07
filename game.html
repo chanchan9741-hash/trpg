@@ -244,11 +244,12 @@
             }
 
             /* ✨ 1. 채팅 구역 전체의 크기를 딱 고정! (더 이상 안 길어짐) */
+/* ✨ 1. 채팅 구역 전체의 크기를 화면의 70%로 확 키움! */
             #chat-section {
                 width: 100% !important;
-                height: 50vh !important; /* 스마트폰 화면 높이의 딱 절반(50%)만 차지 */
-                min-height: 350px !important;
-                max-height: 500px !important; /* 아무리 길어도 500px 이상 안 늘어남 */
+                height: 70vh !important; /* 스마트폰 화면 높이의 70% 차지 */
+                min-height: 400px !important;
+                max-height: 700px !important; /* 70%까지 맘껏 늘어나도록 최대 한계선 해제 */
             }
 
             /* ✨ 2. 넘치는 대화는 채팅창 안에서만 스크롤되도록 마법 부여 */

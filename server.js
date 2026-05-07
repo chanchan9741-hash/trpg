@@ -42,10 +42,17 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     gold: { type: Number, default: 0 },
     skills: { type: [String], default: ['기본 공격'] },
     playerImageUrl: { type: String, default: null },
-    equipment: { type: Map, of: String, default: { "무기": "없음", "방어구": "없음", "장신구": "없음" } },
+    equipment: { 
+    type: Map, 
+    of: String, 
+    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" } 
+},
     createdAt: { type: Date, default: Date.now },
     appearance: { type: String, default: "" },                                   // 👈 추가
     artStyle: { type: String, default: "고품질의 다크 판타지 유화 스타일, 걸작" }, // 👈 추가
+    bestiary: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
+    currentEnemy: { type: mongoose.Schema.Types.Mixed, default: null },
+    
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -98,6 +105,11 @@ passport.deserializeUser(async (id, done) => {
         const user = await User.findById(id);
         done(null, user);
     } catch (err) { done(err, null); }
+});
+
+// ⚔️ 전투 팝업창 HTML을 제공하는 라우터 추가
+app.get('/combat.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'combat.html'));
 });
 
 // 6. 페이지 라우트
@@ -153,7 +165,11 @@ app.get('/api/scenario/:id', async (req, res) => {
             ...scenarioData,
             quests: scenario.quests ? Object.fromEntries(scenario.quests.entries()) : {},
             inventory: scenario.inventory ? Object.fromEntries(scenario.inventory.entries()) : {},
-            playerImageUrl: scenario.playerImageUrl || null
+            playerImageUrl: scenario.playerImageUrl || null,
+            equipment: scenario.equipment ? Object.fromEntries(scenario.equipment.entries()) : { "무기": "없음", "방어구": "없음", "장신구": "없음" },
+            bestiary: (scenario.bestiary && typeof scenario.bestiary.entries === 'function') ? Object.fromEntries(scenario.bestiary.entries()) : (scenario.bestiary || {}),
+            
+            currentEnemy: scenario.currentEnemy || null
         });
     } catch (err) {
         console.error("시나리오 로드 에러:", err);
@@ -220,6 +236,22 @@ app.post('/api/chat', async (req, res) => {
         let currentInvString = invEntries.length > 0 
             ? invEntries.map(([k, v]) => `${k}(${v}개)`).join(', ') 
             : "비어 있음";
+            
+        
+        let currentEquipString = "무기(없음), 방어구(없음), 장신구(없음)";
+        if (scenario.equipment && scenario.equipment.size > 0) {
+            currentEquipString = Array.from(scenario.equipment.entries()).map(([k, v]) => `${k}(${v})`).join(', ');
+        }
+
+// 💡 1. DB에서 도감 데이터를 가져옵니다.
+        const currentBestiary = scenario.bestiary ? Object.fromEntries(scenario.bestiary.entries()) : {};
+        
+        // 💡 2. AI가 읽을 수 있도록 도감의 '상세 스펙'을 예쁘게 정리합니다.
+        const bestiaryDetails = Object.entries(currentBestiary).map(([name, stats]) => 
+            `- ${name} (HP: ${stats.hp}, 공격력: ${stats.attack}, 방어력: ${stats.defense}, 전리품: ${stats.loot || '없음'}, 드랍: ${stats.gold || 0}G)`
+        ).join('\n');
+
+        
         
         const statusSnapshot = `
             [현재 상황 요약]
@@ -233,24 +265,42 @@ app.post('/api/chat', async (req, res) => {
             - 체력: ${scenario.hp || 100} / ${scenario.maxHp || 100}
             - 착용 장비: ${currentEquipString}
             - 금화: ${scenario.gold || 0} G
-            - 보유 스킬: ${(scenario.skills || ['기본 공격']).join(', ')}`;
+            - 보유 스킬 (${(scenario.skills || []).length}/4개): ${(scenario.skills && scenario.skills.length > 0 ? scenario.skills.join(', ') : '없음')}`;
 
-        // 4. 시스템 지시문 (상태창 조작 태그 추가)
-        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 존댓말로 대답하세요.
+        const combatInfo = scenario.currentEnemy 
+            ? `[현재 전투 중!] 적: ${scenario.currentEnemy.name} (남은 체력: ${scenario.currentEnemy.hp}/${scenario.currentEnemy.maxHp}, 공격력: ${scenario.currentEnemy.attack}, 방어력: ${scenario.currentEnemy.defense})` 
+            : `[평시 상태] 현재 세계관에 존재하는 몬스터 도감 상세 정보:\n${bestiaryDetails}`;
+
+// 4. 시스템 지시문 (아이템 획득 및 장비 태그 규칙 강화)
+        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 대답하세요.
         ${shouldSummarize ? "중요: 현재까지 5턴의 대화가 진행되었습니다. 답변 끝에 [요약: 내용] 내용에 지난 5턴간의 주요 사건을 정리한 문장을 넣어 반드시 추가하세요." : ""}
         
         [시스템 태그 사용법 - 변화가 있을 때만 대답 맨 끝에 추가하세요]
         - 퀘스트 생성/변동: [퀘스트: 이름 | 내용]
         - 퀘스트 완료: [완료: 퀘스트이름]
-        - 아이템 획득 시: [아이템획득: 아이템명|수량] (예: 포션 2개 획득 -> [아이템획득: 체력 포션|2])
-        - 아이템 소모/사용 시: [아이템소모: 아이템명|수량] (예: 포션 1개 사용 -> [아이템소모: 체력 포션|1])
+        - 아이템 획득 시: [아이템획득: [장비부위] 아이템명(능력치, 가격)|수량] 
+          (장비부위는 투구, 갑옷, 상의, 하의, 악세사리, 무기 중 택1. 소모품은 부위 생략) 
+          (예: [아이템획득: [무기] 롱소드(공격+10, 100G)|1], [아이템획득: 체력 포션(회복+20, 10G)|3])
+        - 아이템 소모/사용 시: [아이템소모: 아이템명|수량]
         - 장소 이동: [이동: 새로운 장소명]
-        - 체력 증감 시: [체력: 남은체력숫자] (예: 플레이어가 맞아 체력이 80이 되면 [체력: 80])
-        - 최대 체력 증가 시: [최대체력: 숫자] (예: 레벨업 시 [최대체력: 120])
-        - 금화 획득/소비 시: [금화: 변경된총금화] (예: 50골드를 얻어 총 150이 되면 [금화: 150])
+        - 체력 증감 시: [체력: 남은체력숫자]
+        - 최대 체력 증가 시: [최대체력: 숫자]
+        - 금화 획득/소비 시: [금화: 변경된총금화]
         - 스킬 획득 시: [스킬추가: 스킬명]
-        - 장비 착용/변경 시: [장비착용: 부위|아이템명] (예: 무기에 강철 검을 차면 -> [장비착용: 무기|강철 검])
+        - 플레이어가 기술을 배울 때: [스킬획득: 스킬명(숫자)] (예: [스킬획득: 파이어볼(30)]) - 숫자는 데미지
+        - 기존 스킬을 지울 때: [스킬삭제: 지울스킬명] (예: [스킬삭제: 파이어볼])
+        - 새로운 몬스터 등장 시 도감에 등록: [도감등록: 몬스터명|체력|공격력|방어력|전리품명|드랍금화]
+          (예: [도감등록: 다이어 울프|40|12|3|늑대 가죽|15])
+          (🚨주의: 전투를 시작하기 전, 현재 도감 목록에 없는 새로운 적이라면 반드시 이 태그로 먼저 도감에 등록하세요.)
+        - (🚨매우 중요: 플레이어는 스킬을 최대 '4개'까지만 가질 수 있습니다. 4개가 꽉 찼는데 새 스킬을 배우려 한다면, 반드시 기존 스킬 중 하나를 잊어야 한다고 경고하고, 어떤 스킬을 지울지 물어보세요. 플레이어가 지울 스킬을 선택하면 대답 끝에 [스킬삭제: 기존스킬명]과 [스킬획득: 새스킬명(숫자)]를 같이 적어주세요.)
+        ${combatInfo}
+        
+        [⚔️ 전투 전용 태그 규칙 - 반드시 지키세요]
+        - 전투 시작 시: [전투시작: 몬스터명] (반드시 도감에 있는 몬스터만 스폰하세요)
+        - 전투 중 적 피해 발생 시: [적체력: 남은체력숫자] (직접 계산해서 남은 체력을 적으세요)
+        - 적 사망 시: [전투종료] 태그를 적고, 도감을 참고하여 적절한 [아이템획득: ...]과 [금화: ...] 태그로 전리품을 반드시 지급하세요.
         `;
+
 
         const systemMessage = { 
             role: "system", 
@@ -295,57 +345,171 @@ app.post('/api/chat', async (req, res) => {
         let rawReply = response.choices[0].message.content;
         let aiReplyWithDice = isAction ? `🎲 주사위 판정: ${diceRoll}\n\n${rawReply}` : rawReply;
 
+let isUpdated = false;
+
+        // ---------------------------------------------------------
+        // ✨ 1. 도감 등록을 무조건 '전투 시작'보다 먼저 처리합니다!
+        // ---------------------------------------------------------
+        const bestiaryAddMatches = Array.from(rawReply.matchAll(/\[도감등록:\s*([^|\]]+)\|\s*([^|\]]+)\|\s*([^|\]]+)\|\s*([^|\]]+)\|\s*([^|\]]+)\|\s*([^\]]+)\]/g));
+        
+        if (bestiaryAddMatches.length > 0) {
+            if (!scenario.bestiary || typeof scenario.bestiary.set !== 'function') {
+                scenario.bestiary = new Map(Object.entries(scenario.bestiary || {}));
+            }
+            
+            bestiaryAddMatches.forEach(m => {
+                const name = m[1].trim();
+                const hp = parseInt(m[2].replace(/[^0-9]/g, ''), 10) || 10;
+                const attack = parseInt(m[3].replace(/[^0-9]/g, ''), 10) || 1;
+                const defense = parseInt(m[4].replace(/[^0-9]/g, ''), 10) || 0;
+                const loot = m[5].trim();
+                const gold = parseInt(m[6].replace(/[^0-9]/g, ''), 10) || 0;
+
+                scenario.bestiary.set(name, { hp, attack, defense, loot, gold });
+                
+                // 🚨 방금 만든 몬스터를 시스템이 '이번 턴'에 바로 알아볼 수 있게 즉시 추가!
+                currentBestiary[name] = { hp, attack, defense, loot, gold }; 
+                console.log(`📖 시스템: 도감 몬스터 [${name}] 저장 성공!`);
+            });
+            
+            scenario.markModified('bestiary'); 
+            isUpdated = true;
+        }
+
+        // ---------------------------------------------------------
+        // ⚔️ 2. 도감 업데이트가 끝난 후 전투 시작을 검사합니다!
+        // ---------------------------------------------------------
+        const combatStartMatch = rawReply.match(/\[전투시작:\s*(.*?)\]/);
+        if (combatStartMatch) {
+            const enemyName = combatStartMatch[1].trim();
+            if (currentBestiary[enemyName]) {
+                scenario.currentEnemy = { ...currentBestiary[enemyName], name: enemyName, maxHp: currentBestiary[enemyName].hp };
+                isUpdated = true;
+                console.log(`⚔️ 시스템: [${enemyName}] 와(과)의 전투가 시작되었습니다!`);
+            } else {
+                console.log(`⚠️ 시스템 방어: 도감에 없는 몬스터(${enemyName})와 전투를 시도하여 무시했습니다.`);
+            }
+        }
+
+        // ⚔️ 3. 전투 중 체력 갱신 및 전투 종료 파싱
+        const enemyHpMatch = rawReply.match(/\[적체력:\s*(\d+)\]/);
+        if (enemyHpMatch && scenario.currentEnemy) {
+            scenario.currentEnemy.hp = parseInt(enemyHpMatch[1], 10);
+            isUpdated = true;
+        }
+
+        if (rawReply.includes("[전투종료]") || (scenario.currentEnemy && scenario.currentEnemy.hp <= 0)) {
+            scenario.currentEnemy = null; 
+            isUpdated = true;
+        }
+
         // 9. 대화 DB 저장
         if (!isFirstMessage && userMessage) {
             await Message.create({ scenarioId, role: 'user', content: userMessage });
         }
         await Message.create({ scenarioId, role: 'assistant', content: aiReplyWithDice });
 
-        // 10. AI 응답에서 데이터 추출 (상태창 데이터 파싱 추가!)
+ // 10. AI 응답에서 데이터 추출 (상태창 데이터 파싱 추가!)
         const questMatches = Array.from(rawReply.matchAll(/\[퀘스트: (.*?) \| (.*?)\]/g));
         const eventMatch = rawReply.match(/\[요약: (.*?)\]/);
         const completedMatches = Array.from(rawReply.matchAll(/\[완료: (.*?)\]/g));
         const locationMatch = rawReply.match(/\[이동: (.*?)\]/);
-        const equipMatches = Array.from(rawReply.matchAll(/\[장비착용:\s*(.*?)\|?(.*?)\]/g));
+        const equipMatches = Array.from(rawReply.matchAll(/\[장비착용:\s*([^|\]]+)\s*\|\s*((?:\[[^\]]*\])?[^\]]+)\]/g));
         const hpMatch = rawReply.match(/\[체력:\s*(\d+)\]/);
         const maxHpMatch = rawReply.match(/\[최대체력:\s*(\d+)\]/);
         const goldMatch = rawReply.match(/\[금화:\s*(\d+)\]/);
-        const skillMatch = rawReply.match(/\[스킬추가:\s*(.*?)\]/);
-        const itemGetMatches = Array.from(rawReply.matchAll(/\[(?:아이템획득|아이템):\s*(.*?)(?:\|(\d+))?\]/g));
+        
+
+
+
+        
+// ✨ 스킬 삭제 처리 ([스킬삭제: 파이어볼] 태그 인식)
+        const skillRemoveMatch = rawReply.match(/\[스킬삭제:\s*(.+?)\]/g);
+        if (skillRemoveMatch && scenario.skills) {
+            skillRemoveMatch.forEach(tag => {
+                const rawSkillName = tag.match(/\[스킬삭제:\s*(.+?)\]/)[1].trim();
+                const searchName = rawSkillName.split('(')[0].trim(); // "파이어볼"만 추출
+                
+                // 이름이 일치하는 스킬을 찾아서 삭제합니다.
+                const idx = scenario.skills.findIndex(s => s.startsWith(searchName));
+                if (idx !== -1) {
+                    const removedSkill = scenario.skills.splice(idx, 1)[0];
+                    console.log(`🗑️ 시스템: [${removedSkill}] 스킬을 잊었습니다.`);
+                    isUpdated = true;
+                }
+            });
+            scenario.markModified('skills');
+        }
+
+        // ✨ 스킬 획득 처리 (최대 4개 제한!)
+        const skillMatch = rawReply.match(/\[스킬획득:\s*(.+?)\]/g);
+        if (skillMatch) {
+            if (!scenario.skills) scenario.skills = []; 
+            
+            skillMatch.forEach(tag => {
+                const skillName = tag.match(/\[스킬획득:\s*(.+?)\]/)[1].trim();
+                
+                if (!scenario.skills.includes(skillName)) {
+                    // 🚨 스킬이 4개 미만일 때만 추가를 허락합니다!
+                    if (scenario.skills.length < 4) {
+                        scenario.skills.push(skillName);
+                        console.log(`✨ 시스템: 플레이어가 [${skillName}] 스킬을 습득했습니다!`);
+                        isUpdated = true;
+                    } else {
+                        console.log(`⚠️ 시스템 방어: 스킬 한도(4개) 초과! [${skillName}] 획득이 차단되었습니다.`);
+                    }
+                }
+            });
+            scenario.markModified('skills'); 
+        }
+
+        const itemGetMatches = Array.from(rawReply.matchAll(/\[(?:아이템획득|아이템):\s*((?:\[[^\]]*\])?[^|\]]+)(?:\|(\d+))?\]/g));
         const itemRemoveMatches = Array.from(rawReply.matchAll(/\[아이템소모:\s*(.*?)(?:\|(\d+))?\]/g));
 
-        let isUpdated = false;
-
         equipMatches.forEach(m => {
-            const part = m[1].trim(); // 예: 무기
-            const item = m[2].trim(); // 예: 강철 검
-            scenario.equipment.set(part, item);
+            const part = m[1].trim(); 
+            const rawItem = m[2].trim();
+            
+            let targetItem = rawItem;
+            const searchName = rawItem.split('(')[0].trim();
+            for (let key of scenario.inventory.keys()) {
+                if (key.startsWith(searchName)) {
+                    targetItem = key; 
+                    break;
+                }
+            }
+
+            if (!scenario.equipment) scenario.equipment = new Map();
+            scenario.equipment.set(part, targetItem);
+            console.log(`[장비 장착] ${part} 슬롯에 ${targetItem} 장착 완료!`);
             isUpdated = true;
         });
 
-
-
         itemGetMatches.forEach(m => {
-            const name = m[1].trim(); // 💡 수정됨: m[2]가 아니라 m[1]이 이름입니다!
-            const count = m[2] ? parseInt(m[2], 10) : 1; // 💡 수정됨: m[3]이 아니라 m[2]가 개수입니다!
+            const name = m[1].trim(); 
+            const count = m[2] ? parseInt(m[2], 10) : 1; 
             const currentCount = scenario.inventory.get(name) || 0;
             scenario.inventory.set(name, currentCount + count);
             isUpdated = true;
         });
 
-
         itemRemoveMatches.forEach(m => {
-            const name = m[1].trim(); // 💡 여기도 m[1]로 수정
-            const count = m[2] ? parseInt(m[2], 10) : 1; // 💡 여기도 m[2]로 수정
-            const currentCount = scenario.inventory.get(name) || 0;
-            const newCount = currentCount - count;
+            const rawName = m[1].trim(); 
+            const count = m[2] ? parseInt(m[2], 10) : 1;
+            const searchName = rawName.split('(')[0].trim();
 
-            if (newCount <= 0) {
-                scenario.inventory.delete(name); 
-            } else {
-                scenario.inventory.set(name, newCount); 
+            let targetKey = null;
+            for (let key of scenario.inventory.keys()) {
+                if (key.startsWith(searchName)) { targetKey = key; break; }
             }
-            isUpdated = true;
+
+            if (targetKey) {
+                const currentCount = scenario.inventory.get(targetKey) || 0;
+                const newCount = currentCount - count;
+                if (newCount <= 0) scenario.inventory.delete(targetKey); 
+                else scenario.inventory.set(targetKey, newCount); 
+                isUpdated = true;
+            }
         });
 
         if (locationMatch) {
@@ -358,8 +522,7 @@ app.post('/api/chat', async (req, res) => {
             isUpdated = true;
         }
 
-
-        // --- 새로 추가된 상태창 업데이트 로직 ---
+        // --- 상태창 업데이트 로직 (중복된 스킬 코드는 위로 합치고 제거함) ---
         if (hpMatch) {
             scenario.hp = parseInt(hpMatch[1], 10);
             isUpdated = true;
@@ -371,14 +534,6 @@ app.post('/api/chat', async (req, res) => {
         if (goldMatch) {
             scenario.gold = parseInt(goldMatch[1], 10);
             isUpdated = true;
-        }
-        if (skillMatch) {
-            const newSkill = skillMatch[1].trim();
-            if (!scenario.skills) scenario.skills = ['기본 공격'];
-            if (!scenario.skills.includes(newSkill)) {
-                scenario.skills.push(newSkill);
-                isUpdated = true;
-            }
         }
         // ------------------------------------
 
@@ -403,8 +558,8 @@ app.post('/api/chat', async (req, res) => {
             isUpdated = true;
         }
 
-        // DB 최종 업데이트 (중복되어 있던 코드 하나로 합침)
-        if (isUpdated) {
+        // DB 최종 업데이트
+if (isUpdated) {
             await Scenario.findByIdAndUpdate(scenarioId, {
                 $set: { 
                     quests: scenario.quests, 
@@ -416,15 +571,16 @@ app.post('/api/chat', async (req, res) => {
                     hp: scenario.hp,
                     maxHp: scenario.maxHp,
                     gold: scenario.gold,
-                    skills: scenario.skills
+                    skills: scenario.skills,
+                    // 🚨 [핵심 해결] 몽고DB가 소화할 수 있도록 Map 주머니를 순수 객체로 포장해서 던져줍니다!
+                    bestiary: scenario.bestiary ? Object.fromEntries(scenario.bestiary.entries()) : {},
+                    currentEnemy: scenario.currentEnemy 
                 }
             });
         }
 
-        // 11. 클라이언트에 보낼 때 시스템 태그 싹 다 지우기 (정규식 업데이트)
-        const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|장비착용|이동|체력|최대체력|금화|스킬추가): .*?\]/g, "").trim();
-        
-        // 💡 에러났던 부분 수정 완료! (discoveredLocations 뒤에 쉼표 추가)
+        // 11. 클라이언트에 보낼 때 시스템 태그 싹 다 지우기 (스킬획득 태그도 화면에서 숨기도록 정규식 추가!)
+       const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|장비착용|이동|체력|최대체력|금화|스킬추가|스킬획득|스킬삭제|도감등록): .*?\]/g, "").trim();
         return res.json({ 
             reply: cleanReply, 
             diceValue: diceRoll,
@@ -438,13 +594,16 @@ app.post('/api/chat', async (req, res) => {
             maxHp: scenario.maxHp !== undefined ? scenario.maxHp : 100,
             gold: scenario.gold !== undefined ? scenario.gold : 0,
             playerImageUrl: scenario.playerImageUrl,
-            skills: scenario.skills || ['기본 공격']
+            skills: scenario.skills || [],
+            bestiary: scenario.bestiary ? Object.fromEntries(scenario.bestiary.entries()) : {},
+            currentEnemy: scenario.currentEnemy || null
         });
 
     } catch (error) {
         console.error("❌ 에러 발생:", error);
         if (!res.headersSent) res.status(500).send("서버 에러: " + error.message);
     }
+
 });
 
 app.put('/api/scenarios/:id', async (req, res) => {
@@ -502,21 +661,22 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
         
         await Message.deleteMany({ scenarioId }); // 메시지 전체 삭제
         
-        // 💡 퀘스트, 가방뿐만 아니라 상태창과 지도 데이터도 기본값으로 덮어씌웁니다!
+        // 💡 퀘스트, 가방, 6칸 장비창, 도감, 전투 상태까지 완벽하게 기본값으로 덮어씌웁니다!
         await Scenario.findByIdAndUpdate(scenarioId, {
             $set: { 
                 questLines: [], 
                 quests: {}, 
                 inventory: {},
-                equipment: { "무기": "없음", "방어구": "없음", "장신구": "없음" }, // 👈 추가!
+                // 🚨 [핵심 업데이트] 장비창 6칸으로 확실하게 리셋!
+                equipment: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "장신구": "없음", "무기": "없음" },
                 hp: 100,                     // 체력 100으로 리셋
                 maxHp: 100,                  // 최대 체력도 100으로 리셋
-                
                 gold: 0,                     // 금화 0으로 탕진
-                skills: ['기본 공격'],         // 스킬 초기화
+                skills: [],         // 🚨 [추가] 빈칸 대신 '기본 공격' 하나 쥐여주고 리셋!
                 currentLocation: "시작 지점",  // 장소 초기화
-                discoveredLocations: []      // 발견한 지역 초기화
-
+                discoveredLocations: [],     // 발견한 지역 초기화
+                bestiary: {},                // 🚨 [추가] AI가 만들었던 도감 몬스터들도 싹 청소
+                currentEnemy: null           // 🚨 [추가] 혹시 전투 중에 초기화했을 때를 대비해 전투 상태 해제
             } 
         });
         
@@ -545,6 +705,14 @@ app.post('/api/generate-image', async (req, res) => {
         const recentEvents = scenario.questLines.length > 0 
             ? scenario.questLines.slice(-3).join('. ') // 최근 3개 사건만 가져와서 문맥 연결
             : "모험이 막 시작된 상황";
+        
+        const equipEntries = scenario.equipment && typeof scenario.equipment.entries === 'function'
+            ? Array.from(scenario.equipment.entries()) 
+            : [];
+        let currentEquipString = equipEntries.length > 0 
+            ? equipEntries.map(([k, v]) => `${k}(${v})`).join(', ') 
+            : "기본 복장";
+
 
         // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
         const richPrompt = `
@@ -553,8 +721,7 @@ app.post('/api/generate-image', async (req, res) => {
         캐릭터 설정: ${characterInfo}
         배경 세계관: ${worldContext}.
         현재 상황: ${recentEvents}.
-        위의 '그림 스타일(화풍)'과 '캐릭터 외형'을 반드시 최우선으로 지켜서, 현재 상황에 맞는 삽화 1장을 그려주세요.
-        `;
+        현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
         console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
 
         // ✅ 3. 학교 API 규격에 맞춰 전송
@@ -570,6 +737,8 @@ app.post('/api/generate-image', async (req, res) => {
                 "response_format": "url"
             })
         });
+
+        
 
         
 
@@ -636,8 +805,18 @@ app.post('/api/generate-player-image', async (req, res) => {
 
         // ✅ 2. 주인공 설정을 바탕으로 프롬프트 조립
         const characterInfo = scenario.characterInfo;
-        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 애니메 스타일로 1장 그려줘. 설정: ${characterInfo}        그림 스타일(화풍): ${scenario.artStyle}.
-        캐릭터 외형: ${scenario.appearance}.`;
+        const equipEntries = scenario.equipment && typeof scenario.equipment.entries === 'function'
+            ? Array.from(scenario.equipment.entries()) 
+            : [];
+        let currentEquipString = equipEntries.length > 0 
+            ? equipEntries.map(([k, v]) => `${k}(${v})`).join(', ') 
+            : "기본 복장";
+            
+        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 
+            설정: ${characterInfo}
+            그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
+            캐릭터 외형: ${scenario.appearance || '기본 외형'}
+            현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
 
         console.log(`\n================ [🖼️ 플레이어 사진 생성 요청] ================`);
         console.log(`요청 프롬프트: ${imagePrompt}`);
@@ -688,8 +867,75 @@ app.post('/api/generate-player-image', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// 🎒 [추가] 드래그 앤 드롭 장비 수동 장착 API
+// 🎒 [수정] 드래그 앤 드롭 장비 수동 장착/해제 API (가방 수량 연동 완결판)
+app.post('/api/scenario/:id/equip', async (req, res) => {
+    try {
+        const { part, item } = req.body; // part: 부위, item: 새로 낄 아이템(해제 시 "없음")
+        const scenario = await Scenario.findById(req.params.id);
+        if (!scenario) return res.status(404).send("시나리오 없음");
 
+        if (!scenario.equipment) scenario.equipment = new Map();
+        if (!scenario.inventory) scenario.inventory = new Map();
 
+        // 1. 기존 장착된 아이템 확인 및 가방으로 반환 (+1)
+        const oldItem = scenario.equipment.get(part);
+        if (oldItem && oldItem !== "없음") {
+            const currentOldCount = scenario.inventory.get(oldItem) || 0;
+            scenario.inventory.set(oldItem, currentOldCount + 1);
+        }
+
+        // 2. 새 아이템 장착 및 가방에서 제거 (-1)
+        if (item && item !== "없음") {
+            const currentNewCount = scenario.inventory.get(item) || 0;
+            if (currentNewCount > 1) {
+                scenario.inventory.set(item, currentNewCount - 1);
+            } else {
+                scenario.inventory.delete(item); // 0개가 되면 가방에서 삭제
+            }
+        }
+
+        // 3. 장비 슬롯 업데이트
+        scenario.equipment.set(part, item);
+        
+        await scenario.save();
+
+        console.log(`[장비 조작] ${part} 슬롯: ${oldItem || '없음'} -> ${item}`);
+        
+        // 브라우저로 갱신된 장비와 가방 데이터를 모두 보내줍니다.
+        res.json({ 
+            success: true, 
+            equipment: Object.fromEntries(scenario.equipment.entries()),
+            inventory: Object.fromEntries(scenario.inventory.entries())
+        });
+    } catch (err) {
+        console.error("장착 에러:", err);
+        res.status(500).send(err.message);
+    }
+});
+
+// 📖 [추가] 커스텀 몬스터 도감에 추가 API
+// 📖 커스텀 몬스터 도감에 추가 API
+app.post('/api/scenario/:id/bestiary', async (req, res) => {
+    try {
+        const { name, hp, attack, defense, loot, gold } = req.body;
+        const scenario = await Scenario.findById(req.params.id);
+        if (!scenario) return res.status(404).send("시나리오 없음");
+
+        if (!scenario.bestiary) scenario.bestiary = new Map();
+        
+        scenario.bestiary.set(name, { 
+            hp: Number(hp), attack: Number(attack), defense: Number(defense), 
+            loot: loot, gold: Number(gold) 
+        });
+        
+        await scenario.save();
+        res.json({ success: true, bestiary: Object.fromEntries(scenario.bestiary.entries()) });
+    } catch (err) {
+        console.error("도감 추가 에러:", err);
+        res.status(500).send(err.message);
+    }
+});
 
 
 // 9. 서버 실행

@@ -229,6 +229,20 @@
 <body>
     
 <header>
+    <button onclick="openBestiaryModal()" style="padding: 10px; background: #8e44ad; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-left: 10px;">📖 적 도감</button>
+
+<!-- 2. 적 체력바 (id="chat-history" 바로 위쪽에 배치하세요) -->
+<div id="enemy-status-bar" style="display: none; background: #2c3e50; border: 3px solid #e74c3c; border-radius: 8px; padding: 15px; margin-bottom: 15px; color: white; text-align: center; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);">
+    <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 8px;">
+        <span style="font-size: 1.5rem;">👿</span> <span id="enemy-name">고블린</span>
+    </div>
+    <div style="background: #1a252f; border-radius: 10px; height: 20px; width: 100%; position: relative; overflow: hidden; border: 2px solid #000;">
+        <div id="enemy-hp-fill" style="background: linear-gradient(90deg, #c0392b, #e74c3c); height: 100%; width: 100%; transition: width 0.3s ease;"></div>
+        <div id="enemy-hp-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold;">
+            100 / 100
+        </div>
+    </div>
+</div>
     <div style="display: flex; align-items: center; gap: 15px;">
         <div onclick="location.href='/'" style="font-weight: bold; color: var(--accent-blue-gray); cursor: pointer; font-size: 1.2rem;">Gemini TRPG</div>
         <select id="model-select" style="background: var(--white); color: #333; border: 1px solid var(--accent-blue-gray); border-radius: 5px; padding: 5px;">
@@ -313,6 +327,8 @@
     const chatWindow = document.getElementById('chat-window'); 
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
+
+    let currentBestiary = {}; // 도감 데이터를 담을 변수
     let scenarioId = "";
     
     let currentEvents = [];
@@ -330,6 +346,162 @@
 
     const diceBox = document.getElementById('dice-box');
     const diceStatus = document.getElementById('dice-status');
+
+
+    function renderBestiary() {
+        const listEl = document.getElementById('bestiary-list');
+        if (!listEl) return;
+
+        const entries = Object.entries(currentBestiary);
+        if (entries.length === 0) {
+            listEl.innerHTML = "<div style='text-align:center; color:#666; padding:20px;'>등록된 몬스터가 없습니다.</div>";
+            return;Entry
+        }
+
+        listEl.innerHTML = entries.map(([name, info]) => `
+            <div style="background:white; border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div>
+                    <strong style="color:#8e44ad; font-size:1.1rem;">${name}</strong>
+                    <div style="font-size:0.85rem; color:#444; margin-top:4px;">
+                        ❤️ HP: ${info.hp} | ⚔️ ATK: ${info.attack} | 🛡️ DEF: ${info.defense}
+                    </div>
+                    <div style="font-size:0.8rem; color:#e67e22; margin-top:2px;">
+                        💰 ${info.gold}G | 🎁 ${info.loot || '없음'}
+                    </div>
+                </div>
+                <div style="font-size:0.7rem; color:#999; text-align:right;">
+                    시스템용 태그:<br>[전투시작: ${name}]
+                </div>
+            </div>
+        `).join('');
+    }
+
+// 전투 팝업창 변수
+    let combatWindow = null;
+
+    // ⚔️ 적 데이터를 받아 팝업창을 켜고 끄는 함수
+    function updateEnemyUI(enemyData) {
+        if (enemyData) {
+            // 적이 있는데 팝업창이 없거나 닫혀있다면? -> 엽니다!
+            if (!combatWindow || combatWindow.closed) {
+                combatWindow = window.open('/combat.html', 'CombatPopup', 'width=600,height=400,left=300,top=200,resizable=no');
+            }
+        } else {
+            // 적이 없는데(전투종료) 팝업창이 켜져있다면? -> 닫습니다!
+            if (combatWindow && !combatWindow.closed) {
+                combatWindow.close();
+                combatWindow = null;
+            }
+        }
+    }
+
+// 🛡️ [추가] 현재 착용한 장비에서 '공격+O', '방어+O' 수치를 읽어서 총 능력치를 계산하는 함수
+    window.getPlayerStats = function() {
+        let totalAtk = 10; // 기본 맨손 공격력
+        let totalDef = 5;  // 기본 방어력
+
+        if (currentEquipment) {
+            for (let part in currentEquipment) {
+                let item = currentEquipment[part];
+                if (item && item !== "없음") {
+                    // "롱소드(공격+15, 0G)" 같은 텍스트에서 숫자만 쏙 빼냅니다.
+                    let atkMatch = item.match(/공격\s*\+?\s*(\d+)/);
+                    if (atkMatch) totalAtk += parseInt(atkMatch[1], 10);
+                    
+                    let defMatch = item.match(/방어\s*\+?\s*(\d+)/);
+                    if (defMatch) totalDef += parseInt(defMatch[1], 10);
+                }
+            }
+        }
+        return { attack: totalAtk, defense: totalDef };
+    };
+
+// 💡 팝업창이 인벤토리를 가져갈 수 있도록 공용 변수에 담아줍니다.
+    // (보통 updateAllPanels나 loadScenarioInfo 쪽에 currentInventory가 있습니다)
+    window.currentHp = currentHp; 
+    window.maxHp = maxHp;
+    window.currentInventory = currentInventory; // 👈 팝업창을 위한 인벤토리 공유!
+    window.getPlayerHp = function() {
+        return {
+            // currentHp가 혹시라도 없으면 100을 반환하고, 있으면 그 값을 그대로 줍니다!
+            hp: typeof currentHp !== 'undefined' ? currentHp : 100,
+            maxHp: typeof maxHp !== 'undefined' ? maxHp : 100
+        };
+    };
+
+    window.getPlayerInventory = function() {
+        return typeof currentInventory !== 'undefined' ? currentInventory : {};
+    };
+
+    // 🏆 [아이템 소모 기능 추가판]
+    window.finishCombat = function(enemyName, result, finalHp, usedItemsTag = "") {
+        window.currentEnemy = null; 
+        currentHp = finalHp; 
+        window.currentHp = finalHp;
+
+        let actionText = "";
+        let hpTag = `[체력: ${finalHp}]`; 
+        let itemTag = usedItemsTag ? ` ${usedItemsTag}` : ""; // 💊 팝업창이 넘겨준 소모품 태그들
+
+        if (result === 'kill') {
+            actionText = `[시스템] 로컬 전투 승리! 플레이어가 직접 ${enemyName}의 체력을 0 미만으로 깎아 처치했습니다. (남은 내 체력: ${finalHp}) 마스터는 전투 마무리를 멋지게 묘사하고, [전투종료] 태그와 함께 도감 전리품과 ${hpTag}${itemTag} 태그를 반드시 출력해 주세요.`;
+        } else if (result === 'capture') {
+            actionText = `[시스템] 로컬 전투 생포! 플레이어가 ${enemyName}의 체력을 완벽하게 계산해 기절시켰습니다! (남은 내 체력: ${finalHp}) 마스터는 생포 과정을 묘사하고, [전투종료]와 함께 [아이템획득: 포획된 ${enemyName}|1], ${hpTag}${itemTag} 태그를 출력해 주세요.`;
+        } else if (result === 'lose') {
+            actionText = `[시스템] 로컬 전투 패배... 플레이어가 ${enemyName}의 공격을 받고 체력이 0이 되어 쓰러졌습니다. 마스터는 캐릭터가 기절하거나 참혹하게 패배한 상황을 묘사하고, 페널티 상황을 연출해 주세요. [전투종료] 및 ${hpTag}${itemTag} 태그를 반드시 출력해 주세요.`;
+        } else if (result === 'run') {
+            actionText = `[시스템] 로컬 전투 도주! 플레이어가 ${enemyName}에게서 도망쳤습니다. (남은 내 체력: ${finalHp}) 상황을 묘사하고 [전투종료] 처리해 주세요. ${hpTag}${itemTag}`;
+        }
+
+        const chatInput = document.getElementById('chat-input') || document.querySelector('input[type="text"], textarea');
+        if (chatInput) chatInput.value = actionText;
+
+        if (typeof send === 'function') send(); 
+        else {
+            const sendBtn = document.querySelector('button[onclick="send()"]');
+            if (sendBtn) sendBtn.click();
+        }
+    };
+
+
+
+    // 📖 도감 창 열기
+    function openBestiaryModal() {
+        renderBestiary();
+        document.getElementById('bestiary-modal').style.display = 'flex';
+    }
+
+    // 📖 새로운 몬스터 서버로 전송
+    async function addNewMonster() {
+        const name = document.getElementById('new-mob-name').value.trim();
+        const hp = document.getElementById('new-mob-hp').value;
+        const atk = document.getElementById('new-mob-atk').value;
+        const def = document.getElementById('new-mob-def').value;
+        const loot = document.getElementById('new-mob-loot').value.trim();
+        const gold = document.getElementById('new-mob-gold').value;
+
+        if (!name || !hp || !atk || !def) {
+            alert("몬스터의 이름과 필수 능력치를 모두 입력해주세요!");
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/scenario/${scenarioId}/bestiary`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, hp, attack: atk, defense: def, loot, gold })
+            });
+
+            if (response.ok) {
+            alert(`[${name}] 등록 완료!`);
+            currentBestiary[name] = { hp, attack: atk, defense: def, loot, gold }; // 로컬 변수 업데이트
+            renderBestiary();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+    
 
     // 🖼️ 플레이어 사진 화면에 적용하는 함수
     function updatePlayerImageUI(url) {
@@ -380,23 +552,31 @@
     }
 
     // 기존의 가방 렌더링 함수를 모달 디자인에 맞게 살짝 수정 (이미 있다면 덮어씌우세요)
-    function renderInventoryContent() {
-        const list = document.getElementById('inventory-list-modal');
-        if(!list) return;
+
+    // 📖 상태창의 도감 목록을 갱신하는 함수
+    function updateBestiaryUI() {
+        const bestiaryList = document.getElementById('bestiary-list');
+        if (!bestiaryList) return;
         
-        // 객체 { "포션": 3, "검": 1 } 를 배열 [ ["포션", 3], ["검", 1] ] 로 변환
-        const invEntries = Object.entries(currentInventory);
-        
-        list.innerHTML = invEntries.length > 0 
-            ? invEntries.map(([name, count]) => `
-                <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
-                    <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                        ${count}개
-                    </span>
-                </li>
-            `).join('') 
-            : "<li style='color:#777; font-weight:normal; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
+        bestiaryList.innerHTML = ''; // 초기화
+
+        if (Object.keys(currentBestiary).length === 0) {
+            bestiaryList.innerHTML = '<div style="padding: 10px; color: #95a5a6;">아직 등록된 몬스터가 없습니다.</div>';
+            return;
+        }
+
+        // 도감에 있는 몬스터들을 하나씩 화면에 그리기
+        for (let name in currentBestiary) {
+            let stat = currentBestiary[name];
+            let itemStr = `<div style="background: #34495e; margin: 5px 0; padding: 10px; border-radius: 5px; border-left: 4px solid #e74c3c;">
+                <strong style="color: #f1c40f;">${name}</strong><br>
+                <span style="font-size: 0.9em; color: #ecf0f1;">
+                    ❤️체력: ${stat.hp} | ⚔️공격: ${stat.attack} | 🛡️방어: ${stat.defense}<br>
+                    🎁전리품: ${stat.loot} (${stat.gold}G)
+                </span>
+            </div>`;
+            bestiaryList.innerHTML += itemStr;
+        }
     }
 
     function animateDice(finalValue) {
@@ -507,38 +687,202 @@
         }
     }
 
-    // 인벤토리 렌더링
+// 🎒 시각적 인벤토리 & 장비창 렌더링 (태그 완전 숨김 & 이름 깔끔 출력)
     function renderInventoryContent() {
-        const invList = document.getElementById('inventory-list-modal');
-        const equipList = document.getElementById('equipment-list-modal');
+        const invGrid = document.getElementById('inventory-grid-modal');
+        const slots = ["투구", "갑옷", "상의", "하의", "악세사리", "무기"];
 
-        // 가방 그리기
-        if(invList) {
-            const invEntries = Object.entries(currentInventory || {});
-            invList.innerHTML = invEntries.length > 0 
-                ? invEntries.map(([name, count]) => `
-                    <li style="background:#f9f9f9; padding:10px 15px; border-radius:6px; border:1px solid #ccc; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:bold; color:#333;">🗡️ ${name}</span>
-                        <span style="background:var(--accent-blue-gray); color:white; padding:3px 10px; border-radius:15px; font-size:0.85rem; font-weight:bold;">${count}개</span>
-                    </li>
-                `).join('') 
-                : "<li style='color:#777; text-align:center; padding:20px;'>가방이 텅 비어있습니다.</li>";
+        // 💡 [완벽 해결] 대괄호와 소괄호를 무조건 뜯어내서 진짜 '이름'만 남깁니다!
+        const parseItemStr = (str) => {
+            if (!str || str === "없음") return null;
+            let tag = "";
+            let stats = "";
+            let namePart = str.trim();
+            
+            // 1. [태그] 부분 찾아내서 잘라내기 (찌꺼기 방지)
+            const tagMatch = namePart.match(/\[(.*?)\]/); 
+            if (tagMatch) {
+                tag = tagMatch[1].trim();
+                namePart = namePart.replace(tagMatch[0], "").trim(); // 이름에서 [태그] 글자 아예 소멸!
+            }
+
+            // 2. (능력치) 부분 찾아내서 잘라내기
+            const statsMatch = namePart.match(/\((.*?)\)/);
+            if (statsMatch) {
+                stats = statsMatch[1].trim();
+                namePart = namePart.replace(statsMatch[0], "").trim(); // 이름에서 (능력치) 글자 아예 소멸!
+            }
+
+            // 이제 namePart에는 순수한 "방탄복", "롱소드"만 남습니다!
+            return { tag: tag, name: namePart, stats: stats };
+        };
+
+        // 1. 장비 슬롯 렌더링
+        if (currentEquipment) {
+            slots.forEach(part => {
+                const slotEl = document.getElementById(`slot-${part}`);
+                if (!slotEl) return;
+
+                const rawItem = currentEquipment[part] || "없음";
+                const itemData = parseItemStr(rawItem);
+
+                if (itemData) {
+                    slotEl.classList.add('filled');
+                    slotEl.setAttribute('draggable', 'true');
+                    slotEl.setAttribute('ondragstart', `handleEquipDragStart(event, '${part}')`);
+                    slotEl.innerHTML = `
+                        <div style="font-size: 1.2rem; margin-bottom: 2px;">✨</div>
+                        <div style="font-size: 0.8rem; word-break: keep-all; font-weight: bold; color: #333;">${itemData.name}</div>
+                        ${itemData.stats ? `<div style="font-size: 0.65rem; color: #d35400; font-weight: bold; margin-top: 2px;">${itemData.stats}</div>` : ''}
+                    `;
+                } else {
+                    slotEl.classList.remove('filled');
+                    slotEl.removeAttribute('draggable');
+                    slotEl.innerHTML = `<span style="opacity: 0.5;">${part}</span>`;
+                }
+            });
         }
 
-        // 장비창 그리기
-        if(equipList) {
-            const equipEntries = Object.entries(currentEquipment || {});
-            equipList.innerHTML = equipEntries.map(([part, item]) => `
-                <li style="background:#fff; padding:12px 15px; border-radius:6px; border:2px solid var(--accent-blue-gray); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:var(--accent-blue-gray); font-size:0.95rem;">[${part}]</span>
-                    <span style="font-weight:bold; color:#333;">${item}</span>
-                </li>
-            `).join('');
+        // 2. 가방(인벤토리) 격자 렌더링
+        if (invGrid) {
+            const invEntries = Object.entries(currentInventory || {});
+            invGrid.innerHTML = invEntries.length > 0 
+                ? invEntries.map(([rawName, count]) => {
+                    const itemData = parseItemStr(rawName) || { tag: "", name: rawName, stats: "" };
+                    
+                    // 🚨 화면에 지저분하게 뜨던 [태그] 렌더링 코드를 아예 삭제했습니다!
+                    const statsHtml = itemData.stats ? `<div style="font-size:0.65rem; color:#d35400; font-weight:bold; margin-top:3px; word-break:keep-all;">${itemData.stats}</div>` : '';
+
+                    return `
+                        <div draggable="true" ondragstart="handleDragStart(event, '${rawName.replace(/'/g, "\\'")}')" 
+                             style="background: #fff; border: 2px solid #5D4037; border-radius: 8px; padding: 8px 5px; text-align: center; cursor: grab; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <div style="font-size: 1.3rem;">📦</div>
+                            <div style="font-weight: bold; font-size: 0.85rem; line-height: 1.2; color: #333; margin-top: 4px;">${itemData.name}</div>
+                            ${statsHtml}
+                            <div style="position: absolute; top: -5px; right: -5px; background: #5D4037; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 0.7rem; font-weight: bold; line-height: 20px;">${count}</div>
+                        </div>
+                    `;
+                }).join('') 
+                : "";
         }
     }
+    
+    // [장착 준비] 인벤토리에서 아이템을 집었을 때
+    function handleDragStart(event, itemName) {
+        event.dataTransfer.setData("text/plain", "EQUIP:" + itemName); // 장착 신호
+        event.target.style.opacity = '0.5';
+    }
 
+    // [드롭 허용] 마우스가 올라갔을 때 허가
+    function handleDragOver(event) {
+        event.preventDefault(); 
+    }
 
+    // [장착 실행] 아이템을 장비 슬롯에 떨어뜨렸을 때
+async function handleDrop(event, part) {
+        event.preventDefault();
+        const data = event.dataTransfer.getData("text/plain"); 
+        if (!data || !data.startsWith("EQUIP:")) return; 
 
+        const newItemName = data.split("EQUIP:")[1]; 
+
+        // 🛡️ 태그 입구컷 검사 로직!
+        const tagMatch = newItemName.match(/^\[(.*?)\]/);
+        if (tagMatch) {
+            const itemTag = tagMatch[1];
+            if (itemTag !== part) {
+                // 부위가 다르면 경고창 띄우고 장착 취소!
+                alert(`❌ [${itemTag}] 전용 아이템입니다. [${part}] 슬롯에는 장착할 수 없습니다!`);
+                return; 
+            }
+        } else {
+            // 태그가 없는 예전 아이템이거나, 포션일 경우 경고
+            const isConfirmed = confirm(`장비 부위 정보가 없는 아이템입니다. 강제로 [${part}] 슬롯에 장착하시겠습니까?\n(포션 같은 소모품이라면 '취소'를 눌러주세요)`);
+            if (!isConfirmed) return;
+        }
+
+        // --- 검사를 통과했다면 정상적으로 장착 스왑 진행 ---
+        const oldItemName = currentEquipment[part] && currentEquipment[part] !== "없음" ? currentEquipment[part] : null;
+
+        if(!currentEquipment) currentEquipment = {};
+        if(!currentInventory) currentInventory = {};
+
+        if (oldItemName) {
+            currentInventory[oldItemName] = (currentInventory[oldItemName] || 0) + 1;
+        }
+        if (currentInventory[newItemName]) {
+            currentInventory[newItemName] -= 1;
+            if (currentInventory[newItemName] <= 0) delete currentInventory[newItemName];
+        }
+        
+        currentEquipment[part] = newItemName;
+        renderInventoryContent();
+
+        try {
+            const response = await fetch(`/api/scenario/${scenarioId}/equip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ part: part, item: newItemName })
+            });
+
+            if(!response.ok) alert("장비 장착 중 오류가 발생했습니다.");
+            else {
+                const data = await response.json();
+                currentEquipment = data.equipment || { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" };
+                currentInventory = data.inventory || {};
+                renderInventoryContent();
+            }
+        } catch (err) {
+            console.error("장착 통신 에러:", err);
+        }
+    }
+    // 💡 [해제 준비] 장비창에서 아이템을 끄집어 내릴 때
+    function handleEquipDragStart(event, part) {
+        event.dataTransfer.setData("text/plain", "UNEQUIP:" + part); // 해제 신호
+        event.target.style.opacity = '0.5';
+    }
+
+    // 💡 [해제 실행] 장비를 아래쪽 인벤토리에 던져 넣었을 때
+ async function handleUnequipDrop(event) {
+        event.preventDefault();
+        const data = event.dataTransfer.getData("text/plain");
+
+        if (!data || !data.startsWith("UNEQUIP:")) return; // 해제 신호가 아니면 무시
+
+        const part = data.split("UNEQUIP:")[1]; // 어느 부위인지
+        const itemToUnequip = currentEquipment[part];
+
+        if (!itemToUnequip || itemToUnequip === "없음") return; // 뺄 템이 없으면 패스
+
+        // --- ⚡ [프론트엔드 화면 즉시 반영] ---
+        if(!currentEquipment) currentEquipment = {};
+        if(!currentInventory) currentInventory = {};
+
+        // 1. 뺀 아이템을 가방에 +1
+        currentInventory[itemToUnequip] = (currentInventory[itemToUnequip] || 0) + 1;
+        // 2. 슬롯은 비우기
+        currentEquipment[part] = "없음";
+        renderInventoryContent(); // 화면 새로고침
+
+        // --- 📡 [서버와 동기화] ---
+        try {
+            const response = await fetch(`/api/scenario/${scenarioId}/equip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ part: part, item: "없음" })
+            });
+            if(!response.ok) {
+                alert("장비 해제 중 오류가 발생했습니다.");
+            } else {
+                const data = await response.json();
+                currentEquipment = data.equipment || { "무기": "없음", "방어구": "없음", "장신구": "없음" };
+                currentInventory = data.inventory || {};
+                renderInventoryContent();
+            }
+        } catch (err) {
+            console.error("해제 통신 에러:", err);
+        }
+    }
     
     // 모든 패널 한 번에 업데이트 (상태창 포함)
     function updateAllPanels() {
@@ -566,17 +910,31 @@
             const response = await fetch(`/api/scenario/${scenarioId}`);
             const data = await response.json();
             
+                        // 통신 성공 후 data를 처리하는 부분에 추가
+            currentBestiary = data.bestiary || {}; 
+            window.currentEnemy = data.currentEnemy || null; 
+            updateEnemyUI(window.currentEnemy);
             currentEvents = data.questLines || [];
             currentQuests = data.quests || {}; 
             currentInventory = data.inventory || {};
+            currentEquipment = data.equipment || { "무기": "없음", "방어구": "없음", "장신구": "없음" };
+            currentBestiary = data.bestiary || {};
+            
             if (data.currentLocation) currentLocation = data.currentLocation;
             if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
+            if (typeof updateBestiaryUI === 'function') updateBestiaryUI();
+            if (typeof updateEnemyUI === 'function') updateEnemyUI(window.currentEnemy);
 
             // 저장된 캐릭터 상태 불러오기
             if (data.hp !== undefined) currentHp = data.hp;
             if (data.maxHp !== undefined) maxHp = data.maxHp;
             if (data.gold !== undefined) currentGold = data.gold;
-            if (data.skills) currentSkills = data.skills;
+            if (data.skills) {
+                currentSkills = data.skills;
+                window.currentSkills = data.skills; // 👈 이 줄을 추가!
+            
+            
+}
             if (data.playerImageUrl) updatePlayerImageUI(data.playerImageUrl);
             
             updateAllPanels(); 
@@ -585,7 +943,12 @@
         }
     }
 
-    function addMessage(sender, text, isImage = false) {
+function addMessage(sender, text, isImage = false) {
+        // 🚨 [핵심 추가] 텍스트가 '[시스템]'으로 시작하면 화면에 아예 그리지 않고 몰래 함수를 끝냅니다!
+        if (typeof text === 'string' && text.startsWith('[시스템]')) {
+            return; 
+        }
+
         const div = document.createElement('div');
         div.className = `msg ${sender === '마스터' ? 'master' : 'player'}`;
         
@@ -653,19 +1016,29 @@
                 if (data.diceValue) animateDice(data.diceValue);
                 
                 addMessage("마스터", data.reply);
+                                
+                                // 각종 정보 최신화
+                                // 통신 성공 후 data를 처리하는 부분에 추가
+                currentBestiary = data.bestiary || {}; 
                 
-                // 각종 정보 최신화
+                window.currentEnemy = data.currentEnemy || null; 
+                updateEnemyUI(window.currentEnemy);
+                renderInventoryContent();
                 currentEvents = data.questLines || [];
                 currentQuests = data.quests || {};
                 currentInventory = data.inventory || {};
                 if (data.currentLocation) currentLocation = data.currentLocation;
                 if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
+                currentEquipment = data.equipment || { "무기": "없음", "방어구": "없음", "장신구": "없음" };
 
                 // 💡 AI가 상태 변화(체력 감소, 골드 획득 등)를 넘겨주면 반영
                 if (data.hp !== undefined) currentHp = data.hp;
                 if (data.maxHp !== undefined) maxHp = data.maxHp;
                 if (data.gold !== undefined) currentGold = data.gold;
-                if (data.skills) currentSkills = data.skills;
+                if (data.skills) {
+                    currentSkills = data.skills;
+                    window.currentSkills = data.skills; // 👈 이 줄을 추가!
+}
                 
                 updateAllPanels();
             } else {
@@ -800,34 +1173,93 @@
     </div>
 </div>
 
-
-<div id="inventory-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
-    <div style="background: var(--bg-beige); width: 85%; max-width: 800px; max-height: 75vh; border-radius: 12px; border: 4px solid #8D6E63; display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+<div id="inventory-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center;">
+    <div style="background: var(--bg-beige); width: 95%; max-width: 850px; height: 90vh; border-radius: 15px; border: 4px solid #5D4037; display: flex; flex-direction: column; padding: 20px; box-shadow: 0 0 50px rgba(0,0,0,1);">
         
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #8D6E63; padding-bottom: 15px; margin-bottom: 20px;">
-            <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">🎒 소지품 및 장비</h2>
-            <button onclick="closeInventoryModal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #5D4037; padding-bottom: 10px; margin-bottom: 15px;">
+            <h2 style="margin: 0; color: #3E2723;">🛡️ 캐릭터 장비 및 소지품</h2>
+            <button onclick="closeInventoryModal()" style="background: #c0392b; color: white; border: none; padding: 10px 25px; border-radius: 8px; cursor: pointer; font-weight: bold;">닫기</button>
         </div>
 
-        <div style="flex: 1; display: flex; gap: 20px; overflow: hidden;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
             
-            <div style="flex: 1; display: flex; flex-direction: column;">
-                <h3 style="margin-top: 0; color: #333; border-left: 4px solid #8D6E63; padding-left: 10px;">📦 내 가방</h3>
-                <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--white); padding: 15px; border-radius: 8px; border: 2px solid #8D6E63;">
-                    <ul id="inventory-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
-                        </ul>
+            <div style="display: flex; justify-content: center; align-items: center; background: #2D1B18; padding: 20px; border-radius: 12px; position: relative; min-height: 350px;">
+                
+                <div style="display: flex; flex-direction: column; gap: 20px; position: absolute; left: 10%;">
+                    <div id="slot-투구" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '투구')" class="equip-slot"></div>
+                    <div id="slot-상의" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '상의')" class="equip-slot"></div>
+                    <div id="slot-하의" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '하의')" class="equip-slot"></div>
+                </div>
+
+                <div style="width: 250px; height: 320px; opacity: 0.3; pointer-events: none;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/114/114343.png" alt="silhouette" style="width: 100%; height: 100%; object-fit: contain; filter: invert(1);">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 20px; position: absolute; right: 10%;">
+                    <div id="slot-무기" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '무기')" class="equip-slot"></div>
+                    <div id="slot-갑옷" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '갑옷')" class="equip-slot"></div>
+                    <div id="slot-악세사리" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '악세사리')" class="equip-slot"></div>
                 </div>
             </div>
 
-            <div style="flex: 1; display: flex; flex-direction: column;">
-                <h3 style="margin-top: 0; color: #333; border-left: 4px solid var(--accent-blue-gray); padding-left: 10px;">🛡️ 착용 중인 장비</h3>
-                <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--bg-light-gray); padding: 15px; border-radius: 8px; border: 2px solid var(--accent-blue-gray);">
-                    <ul id="equipment-list-modal" style="font-size: 1.1rem; line-height: 1.8; color: #333; font-weight: bold; list-style: none; padding: 0; margin: 0;">
-                        </ul>
-                </div>
+            <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <h3 style="margin-bottom: 10px; color: #3E2723; font-size: 1.1rem; border-left: 5px solid #5D4037; padding-left: 10px;">📦 가방 (아이템을 위로 드래그하세요)</h3>
+                <div id="inventory-grid-modal" ondragover="handleDragOver(event)" ondrop="handleUnequipDrop(event)" 
+                     style="flex: 1; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 15px; border-radius: 10px; border: 2px solid #5D4037; display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); grid-auto-rows: 100px; gap: 10px;">
+                    </div>
             </div>
 
         </div>
+    </div>
+</div>
+
+<style>
+    /* 슬롯 공통 스타일 */
+    .equip-slot {
+        width: 80px;
+        height: 80px;
+        background: rgba(0,0,0,0.6);
+        border: 2px dashed #8D6E63;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #8D6E63;
+        font-size: 0.8rem;
+        font-weight: bold;
+        transition: 0.2s;
+        cursor: default;
+        position: relative;
+    }
+    .equip-slot:hover { border-color: #D7CCC8; background: rgba(0,0,0,0.8); }
+    .equip-slot.filled { border: 2px solid var(--accent-blue-gray); background: #fff; color: #333; cursor: grab; }
+</style>
+
+<div id="bestiary-modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
+    <div style="background: var(--bg-beige); width: 95%; max-width: 650px; height: 85vh; padding: 20px; border-radius: 12px; border: 4px solid #8e44ad; display: flex; flex-direction: column;">
+        
+        <h2 style="margin-top: 0; color: #333; border-bottom: 2px solid #8e44ad; padding-bottom: 10px;">📖 세계관 몬스터 도감</h2>
+        
+        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ccc; flex-shrink: 0;">
+            <h4 style="margin: 0 0 10px 0;">➕ 새로운 몬스터 창조</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <input type="text" id="new-mob-name" placeholder="이름" style="padding: 6px;">
+                <input type="number" id="new-mob-hp" placeholder="체력(HP)" style="padding: 6px;">
+                <input type="number" id="new-mob-atk" placeholder="공격력" style="padding: 6px;">
+                <input type="number" id="new-mob-def" placeholder="방어력" style="padding: 6px;">
+                <input type="text" id="new-mob-loot" placeholder="전리품 태그 포함" style="padding: 6px;">
+                <input type="number" id="new-mob-gold" placeholder="골드" style="padding: 6px;">
+            </div>
+            <button onclick="addNewMonster()" style="width: 100%; margin-top: 10px; background: #27ae60; color: white; padding: 8px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">몬스터 등록</button>
+        </div>
+
+        <h4 style="margin: 10px 0 5px 0;">📜 현재 등록된 적들</h4>
+        <div id="bestiary-list" style="flex: 1; overflow-y: auto; background: rgba(255,255,255,0.6); border: 1px solid #8e44ad; border-radius: 8px; padding: 10px;">
+            </div>
+
+        <button onclick="document.getElementById('bestiary-modal').style.display='none'" style="width: 100%; margin-top: 15px; background: #c0392b; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">닫기</button>
     </div>
 </div>
 

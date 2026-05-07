@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>⚔️ 턴제 전투 돌입!</title>
+    <style>
+        body { background: linear-gradient(to bottom, #2c3e50, #1a252f); color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { display: flex; justify-content: space-between; align-items: center; flex: 1; padding: 0 20px; }
+        .btn { padding: 15px; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; color: white; border: none; transition: 0.2s; }
+        .btn:hover { filter: brightness(1.2); }
+        .btn:disabled { background: #555 !important; border-color: #333 !important; cursor: not-allowed; opacity: 0.7; }
+        #combat-log { background: rgba(0,0,0,0.7); border: 2px solid #f39c12; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 1.1rem; font-weight: bold; color: #f1c40f; min-height: 25px; transition: 0.3s; }
+        .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h2 style="color: #e74c3c; text-align: center; margin-top: 0;">⚠️ 야생의 적이 나타났다!</h2>
+    <div id="combat-log">행동을 선택하십시오!</div>
+
+    <div class="container">
+        <!-- 왼쪽: 플레이어 -->
+        <div style="text-align: center;">
+            <div style="font-size: 5rem;">👤</div>
+            <h3 style="margin-bottom:5px;">나 (공: <span id="my-atk">0</span> / 방: <span id="my-def">0</span>)</h3>
+            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #7f8c8d; position: relative; margin: 0 auto; overflow: hidden;">
+                <div id="my-hp-fill" style="background: #27ae60; height: 100%; width: 100%; transition: width 0.3s;"></div>
+                <div id="my-hp-text" style="position: absolute; top: 0; left: 0; width: 100%; text-align: center; line-height: 25px; font-weight: bold;"></div>
+            </div>
+        </div>
+        <div style="font-size: 3rem; color: #f39c12; font-style: italic; font-weight: bold;">VS</div>
+        <!-- 오른쪽: 몬스터 -->
+        <div style="text-align: center;">
+            <div style="font-size: 5rem;">👿</div>
+            <h3 id="enemy-name" style="margin-bottom:5px;">로딩중...</h3>
+            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #7f8c8d; position: relative; margin: 0 auto; overflow: hidden;">
+                <div id="hp-fill" style="background: #e74c3c; height: 100%; width: 100%; transition: width 0.3s;"></div>
+                <div id="hp-text" style="position: absolute; top: 0; left: 0; width: 100%; text-align: center; line-height: 25px; font-weight: bold;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단: 조작 버튼 2단 배치 -->
+    <div style="display: flex; flex-direction: column; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 10px;">
+        
+        <!-- 윗줄: 공격 및 스킬 -->
+        <div class="action-row">
+            <button class="btn action-btn" style="background: #c0392b; border: 2px solid #e74c3c; flex: 1; min-width: 120px;" onclick="action('attack')">⚔️ 일반 공격</button>
+            <div style="display: flex; flex: 2; min-width: 200px;">
+                <select id="skill-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #ecf0f1; cursor: pointer; color: #333; font-weight: bold;"></select>
+                <button class="btn action-btn" style="background: #2980b9; border: 2px solid #3498db; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('skill')">✨ 사용</button>
+            </div>
+        </div>
+
+        <!-- 아랫줄: 아이템 및 도망 -->
+        <div class="action-row" style="margin-bottom: 0;">
+            <div style="display: flex; flex: 2; min-width: 200px;">
+                <select id="item-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #ecf0f1; cursor: pointer; color: #333; font-weight: bold;"></select>
+                <button class="btn action-btn" style="background: #27ae60; border: 2px solid #2ecc71; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('item')">💊 먹기</button>
+            </div>
+            <button class="btn action-btn" style="background: #7f8c8d; border: 2px solid #95a5a6; flex: 1; min-width: 120px;" onclick="action('run')">🏃 도망</button>
+        </div>
+
+    </div>
+
+    <script>
+        let enemy = null;
+        let myStats = { attack: 10, defense: 5 };
+        let myHp = 100;
+        let myMaxHp = 100;
+        let isPlayerTurn = true; 
+        
+        let myInventory = {}; // 내 가방 (로컬 복사본)
+        let usedItems = {};   // 이번 전투에서 먹은 포션 기록장
+
+        // 🔄 팝업창이 켜질 때 부모 창에서 데이터를 가져옵니다.
+        window.onload = function() {
+            if (!window.opener || !window.opener.currentEnemy) { window.close(); return; }
+            
+            enemy = JSON.parse(JSON.stringify(window.opener.currentEnemy));
+            myStats = window.opener.getPlayerStats(); 
+            
+            // 🚨 [핵심 수정] 부모 창의 체력 함수를 호출해서 내 진짜 체력을 가져옵니다!
+            const hpData = window.opener.getPlayerHp();
+            myHp = hpData.hp;
+            myMaxHp = hpData.maxHp;
+
+            // 💡 인벤토리 깊은 복사 (전투 중에만 임시로 쓸 가방)
+            const rawInventory = window.opener.getPlayerInventory ? window.opener.getPlayerInventory() : {};
+            myInventory = JSON.parse(JSON.stringify(rawInventory));
+
+            document.getElementById('my-atk').innerText = myStats.attack;
+            document.getElementById('my-def').innerText = myStats.defense;
+            updateUI();
+            updateItemUI(); // 아이템 목록 세팅
+
+            // 스킬 목록 세팅
+            const mySkills = window.opener.currentSkills || [];
+            const skillSelect = document.getElementById('skill-select');
+            let skillCount = 0;
+            if (Array.isArray(mySkills)) {
+                mySkills.forEach(skill => {
+                    let opt = document.createElement('option');
+                    opt.value = typeof skill === 'string' ? skill : skill.name;
+                    opt.innerText = opt.value;
+                    skillSelect.appendChild(opt);
+                    skillCount++;
+                });
+            }
+            if (skillCount === 0) {
+                let opt = document.createElement('option');
+                opt.value = ""; opt.innerText = "보유 스킬 없음";
+                skillSelect.appendChild(opt);
+                skillSelect.disabled = true;
+            }
+        };
+
+        // 💊 회복약만 쏙쏙 골라서 드롭다운에 넣기
+        function updateItemUI() {
+            const itemSelect = document.getElementById('item-select');
+            itemSelect.innerHTML = '';
+            let itemCount = 0;
+
+            for (let key in myInventory) {
+                // 이름에 '회복'이나 '체력'이 들어간 아이템만 힐템으로 판정!
+                if (key.includes('회복') || key.includes('체력')) {
+                    let count = myInventory[key];
+                    if (count > 0) {
+                        let opt = document.createElement('option');
+                        opt.value = key;
+                        opt.innerText = `${key} (보유: ${count}개)`;
+                        itemSelect.appendChild(opt);
+                        itemCount++;
+                    }
+                }
+            }
+
+            if (itemCount === 0) {
+                let opt = document.createElement('option');
+                opt.value = ""; opt.innerText = "사용 가능한 포션 없음";
+                itemSelect.appendChild(opt);
+                itemSelect.disabled = true;
+            } else {
+                itemSelect.disabled = false;
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('enemy-name').innerText = enemy.name;
+            document.getElementById('hp-fill').style.width = Math.max(0, Math.min(100, (enemy.hp / enemy.maxHp) * 100)) + '%';
+            document.getElementById('hp-text').innerText = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
+
+            document.getElementById('my-hp-fill').style.width = Math.max(0, Math.min(100, (myHp / myMaxHp) * 100)) + '%';
+            document.getElementById('my-hp-text').innerText = `${Math.max(0, myHp)} / ${myMaxHp}`;
+
+            const btns = document.querySelectorAll('.action-btn');
+            btns.forEach(btn => btn.disabled = !isPlayerTurn);
+        }
+
+        function log(msg, color = "#f1c40f") {
+            const logBox = document.getElementById('combat-log');
+            logBox.innerText = msg;
+            logBox.style.color = color;
+        }
+
+        // ⚔️ 플레이어 턴 행동!
+        function action(type) {
+            if (!isPlayerTurn || enemy.hp < 0 || myHp <= 0) return; 
+            isPlayerTurn = false; 
+
+            if (type === 'run') {
+                log(`🏃 무사히 도망쳤다...`);
+                setTimeout(() => {
+                    window.opener.finishCombat(enemy.name, 'run', myHp, getUsedItemsTag());
+                    window.close();
+                }, 1000);
+                return;
+            }
+
+            // 💊 아이템 사용 로직
+            if (type === 'item') {
+                const itemKey = document.getElementById('item-select').value;
+                if (!itemKey) {
+                    log(`⚠️ 사용할 아이템이 없습니다!`);
+                    isPlayerTurn = true; // 취소되므로 턴 돌려줌
+                    updateUI();
+                    return;
+                }
+
+                // "체력 포션(회복+20)" 에서 숫자(20)만 뽑아냅니다.
+                let healAmount = 20; 
+                const match = itemKey.match(/(?:회복|체력)\s*\+?\s*(\d+)/);
+                if (match) healAmount = parseInt(match[1], 10);
+
+                // 체력 회복 (최대 체력까지만)
+                myHp = Math.min(myMaxHp, myHp + healAmount);
+                
+                // 가방에서 하나 빼고, 먹은 기록 남기기
+                myInventory[itemKey]--;
+                usedItems[itemKey] = (usedItems[itemKey] || 0) + 1;
+
+                let cleanItemName = itemKey.split('(')[0].trim();
+                log(`💊 [${cleanItemName}] 마심! 체력을 ${healAmount} 회복했습니다.`, "#2ecc71");
+                
+                updateUI();
+                updateItemUI(); // 포션 개수 갱신
+
+                setTimeout(enemyTurn, 1000); // 포션 마셨으니 적의 턴으로!
+                return;
+            }
+
+            // ⚔️ 공격 & 스킬 로직
+            let damage = 0;
+            let actionName = "";
+            if (type === 'attack') {
+                damage = Math.max(1, myStats.attack - enemy.defense + Math.floor(Math.random() * 3));
+                actionName = "일반 공격";
+            } else if (type === 'skill') {
+                const rawSkillName = document.getElementById('skill-select').value;
+                if (!rawSkillName) {
+                    log(`⚠️ 스킬이 없습니다! 일반 공격으로 대체합니다.`);
+                    damage = Math.max(1, myStats.attack - enemy.defense);
+                    actionName = "일반 공격";
+                } else {
+                    let skillPower = 0;
+                    const powerMatch = rawSkillName.match(/(\d+)/); 
+                    if (powerMatch) skillPower = parseInt(powerMatch[1], 10);
+                    else skillPower = Math.floor(myStats.attack * 1.5);
+                    
+                    damage = Math.max(5, (myStats.attack + skillPower) - enemy.defense);
+                    actionName = rawSkillName.split('(')[0].trim();
+                }
+            }
+
+            enemy.hp -= damage;
+            log(`✨ [${actionName}] ${enemy.name}에게 ${damage}의 피해!!`, "#3498db");
+            updateUI();
+
+            if (enemy.hp <= 0) checkDeath();
+            else setTimeout(enemyTurn, 1000);
+        }
+
+        // 👿 적의 턴!
+        function enemyTurn() {
+            if (enemy.hp <= 0 || myHp <= 0) return;
+
+            let enemyDamage = Math.max(1, enemy.attack - myStats.defense + Math.floor(Math.random() * 3));
+            myHp -= enemyDamage;
+            
+            log(`🩸 [적의 반격!] ${enemy.name}의 공격! 나에게 ${enemyDamage}의 피해!`, "#e74c3c");
+            updateUI();
+
+            if (myHp <= 0) {
+                checkDeath();
+            } else {
+                setTimeout(() => {
+                    log(`▶ 내 턴이다! 행동을 선택하자.`, "#2ecc71");
+                    isPlayerTurn = true;
+                    updateUI();
+                }, 1000);
+            }
+        }
+
+        // 📦 먹은 포션들을 AI에게 보낼 태그로 묶어주는 함수
+        function getUsedItemsTag() {
+            let tags = "";
+            for (let key in usedItems) {
+                tags += `[아이템소모: ${key}|${usedItems[key]}] `;
+            }
+            return tags.trim();
+        }
+
+        // 💀 전투 종료 처리
+        function checkDeath() {
+            const tags = getUsedItemsTag(); // 💡 먹은 포션 정보 챙기기!
+            if (enemy.hp < 0) {
+                log(`🩸 ${enemy.name}의 숨통을 끊었습니다! (오버킬)`);
+                setTimeout(() => { window.opener.finishCombat(enemy.name, 'kill', myHp, tags); window.close(); }, 1500);
+            } else if (enemy.hp === 0) {
+                log(`🪢 ${enemy.name} 기절! 완벽하게 생포했습니다!!`);
+                setTimeout(() => { window.opener.finishCombat(enemy.name, 'capture', myHp, tags); window.close(); }, 1500);
+            } else if (myHp <= 0) {
+                log(`💀 눈앞이 깜깜해졌다... 패배했습니다.`);
+                setTimeout(() => { window.opener.finishCombat(enemy.name, 'lose', 0, tags); window.close(); }, 1500);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">         
     <title>모험 중 - Gemini TRPG</title>
     <style>
 
@@ -224,6 +224,40 @@
             0%, 80%, 100% { opacity: 0; }
             40% { opacity: 1; }
         }
+
+/* 📱 모바일 전용 스타일 (game.html 용 - 채팅창 고정 & 내부 스크롤) */
+        @media (max-width: 768px) {
+            body {
+                overflow-y: auto; 
+            }
+            
+            #game-container {
+                flex-direction: column; 
+                height: auto; 
+                padding: 10px;
+            }
+            
+            .side-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+            }
+
+            /* ✨ 1. 채팅 구역 전체의 크기를 딱 고정! (더 이상 안 길어짐) */
+            #chat-section {
+                width: 100% !important;
+                height: 50vh !important; /* 스마트폰 화면 높이의 딱 절반(50%)만 차지 */
+                min-height: 350px !important;
+                max-height: 500px !important; /* 아무리 길어도 500px 이상 안 늘어남 */
+            }
+
+            /* ✨ 2. 넘치는 대화는 채팅창 안에서만 스크롤되도록 마법 부여 */
+            #chat-window {
+                flex: 1;
+                overflow-y: auto !important; /* 넘치면 스크롤바 생성 */
+                -webkit-overflow-scrolling: touch; /* 📱 스마트폰(아이폰 등)에서 버벅거리지 않고 부드럽게 스크롤되게 하는 핵심 태그 */
+            }
+        }
     </style>
 </head>
 <body>
@@ -380,11 +414,12 @@
     let combatWindow = null;
 
     // ⚔️ 적 데이터를 받아 팝업창을 켜고 끄는 함수
-    function updateEnemyUI(enemyData) {
+function updateEnemyUI(enemyData) {
         if (enemyData) {
             // 적이 있는데 팝업창이 없거나 닫혀있다면? -> 엽니다!
             if (!combatWindow || combatWindow.closed) {
-                combatWindow = window.open('/combat.html', 'CombatPopup', 'width=600,height=400,left=300,top=200,resizable=no');
+                // 🚀 가로 900, 세로 750으로 확 키우고, 크기 조절(resizable)도 가능하게 수정!
+                combatWindow = window.open('/combat.html', 'CombatPopup', 'width=900,height=750,left=200,top=100,resizable=yes');
             }
         } else {
             // 적이 없는데(전투종료) 팝업창이 켜져있다면? -> 닫습니다!

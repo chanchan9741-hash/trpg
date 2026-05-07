@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
     <title>⚔️ 턴제 전투 돌입!</title>
     <style>
@@ -11,6 +12,35 @@
         .btn:disabled { background: #555 !important; border-color: #333 !important; cursor: not-allowed; opacity: 0.7; }
         #combat-log { background: rgba(0,0,0,0.7); border: 2px solid #f39c12; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 1.1rem; font-weight: bold; color: #f1c40f; min-height: 25px; transition: 0.3s; }
         .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        /* 📱 모바일 전용 스타일 (화면 폭이 768px 이하일 때만 발동) */
+        @media (max-width: 768px) {
+            /* 1. [나] VS [적] 세로로 배치 */
+            .container { 
+                flex-direction: column; 
+                padding: 10px; 
+            }
+            .container > div { 
+                margin-bottom: 15px; 
+            }
+            /* VS 글씨 크기 살짝 줄이기 */
+            .container > div:nth-child(2) { 
+                font-size: 2rem !important; 
+            }
+            
+            /* 2. 조작 버튼들도 세로로 넓게 배치하여 누르기 쉽게 만들기 */
+            .action-row { 
+                flex-direction: column; 
+                gap: 15px; 
+            }
+            .action-row > div { 
+                width: 100%; 
+            }
+            .btn { 
+                width: 100%; 
+                padding: 15px; 
+                font-size: 1.1rem; 
+            }
+        }
     </style>
 </head>
 <body>

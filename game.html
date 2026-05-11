@@ -300,6 +300,9 @@
                     그리는 중...
                 </div>
             </div>
+            <div id="player-name" style="margin-top: 12px; font-size: 1.15rem; font-weight: bold; color: var(--text-black); background: var(--bg-light-gray); padding: 4px 16px; border-radius: 20px; border: 2px solid var(--accent-blue-gray); box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                모험가
+            </div>
             
         </div>
         
@@ -433,7 +436,7 @@ function updateEnemyUI(enemyData) {
 
 // 🛡️ [추가] 현재 착용한 장비에서 '공격+O', '방어+O' 수치를 읽어서 총 능력치를 계산하는 함수
     window.getPlayerStats = function() {
-        let totalAtk = 10; // 기본 맨손 공격력
+        let totalAtk = 5; // 기본 맨손 공격력
         let totalDef = 5;  // 기본 방어력
 
         if (currentEquipment) {
@@ -945,6 +948,10 @@ async function handleDrop(event, part) {
         try {
             const response = await fetch(`/api/scenario/${scenarioId}`);
             const data = await response.json();
+
+            if (data.title) {
+                document.getElementById('player-name').innerText = data.title;
+            }
             
                         // 통신 성공 후 data를 처리하는 부분에 추가
             currentBestiary = data.bestiary || {}; 

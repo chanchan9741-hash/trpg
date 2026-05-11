@@ -45,7 +45,8 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     equipment: { 
     type: Map, 
     of: String, 
-    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" } 
+    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" },
+    characters: { type: Map, of: String, default: {} }
 },
     createdAt: { type: Date, default: Date.now },
     appearance: { type: String, default: "" },                                   // 👈 추가

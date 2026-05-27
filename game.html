@@ -381,6 +381,9 @@
     let maxHp = 100;
     let currentGold = 0;
     let currentSkills = ['기본 공격'];
+    let currentCharacters = {};
+    let currentParty = [];  
+        
 
     const diceBox = document.getElementById('dice-box');
     const diceStatus = document.getElementById('dice-status');
@@ -724,7 +727,41 @@ function updateEnemyUI(enemyData) {
         } else {
             questList.innerHTML = "<p style='color: #777;'>진행 중인 퀘스트가 없습니다.</p>";
         }
+        const characterList = document.getElementById('character-list-modal');
+        if (characterList) {
+            const charEntries = Object.entries(currentCharacters || {});
+            if (charEntries.length > 0) {
+                characterList.innerHTML = charEntries.map(([name, info]) => {
+                    // 이 인물이 내 동료(파티)인지 확인!
+                    const isComrade = currentParty.includes(name);
+                    const borderCol = isComrade ? "#3498db" : "#2c3e50"; 
+                    const badge = isComrade ? `<span style="background:#3498db; color:white; padding:2px 6px; border-radius:10px; font-size:0.7em; margin-left:5px;">🤝 파티원</span>` : '';
+                    
+                    // 정보 파싱 (에러 방지용)
+                    const location = info.location || "알 수 없음";
+                    const desc = info.desc || info || "정보 없음";
+                    const relation = info.relation || "알 수 없음";
+
+                    return `
+                    <div style="background: #fff; border-left: 5px solid ${borderCol}; padding: 12px; margin-bottom: 12px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px dashed #eee; padding-bottom:5px;">
+                            <strong style="color: #111; font-size: 1.1em;">${name} ${badge}</strong>
+                            <span style="font-size: 0.8em; color: #7f8c8d; background:#ecf0f1; padding:2px 8px; border-radius:12px;">📍 ${location}</span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #444; line-height: 1.5;">
+                            <div style="margin-bottom: 4px;"><strong>ℹ️ 정보:</strong> ${desc}</div>
+                            <div><strong>❤️ 관계:</strong> <span style="color:#d35400;">${relation}</span></div>
+                        </div>
+                    </div>
+                `}).join('');
+            } else {
+                characterList.innerHTML = "<p style='color: #777; margin-top:10px;'>아직 만난 인물이 없습니다.</p>";
+            }
+        }
     }
+
+
+    
 
 // 🎒 시각적 인벤토리 & 장비창 렌더링 (태그 완전 숨김 & 이름 깔끔 출력)
     function renderInventoryContent() {
@@ -962,6 +999,8 @@ async function handleDrop(event, part) {
             currentInventory = data.inventory || {};
             currentEquipment = data.equipment || { "무기": "없음", "방어구": "없음", "장신구": "없음" };
             currentBestiary = data.bestiary || {};
+            currentCharacters = data.characters || {};
+            currentParty = data.party || [];
             
             if (data.currentLocation) currentLocation = data.currentLocation;
             if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
@@ -1074,6 +1113,9 @@ function addMessage(sender, text, isImage = false) {
                 if (data.discoveredLocations) discoveredLocations = data.discoveredLocations;
                 currentEquipment = data.equipment || { "무기": "없음", "방어구": "없음", "장신구": "없음" };
 
+                currentCharacters = data.characters || {};
+                currentParty = data.party || [];
+
                 // 💡 AI가 상태 변화(체력 감소, 골드 획득 등)를 넘겨주면 반영
                 if (data.hp !== undefined) currentHp = data.hp;
                 if (data.maxHp !== undefined) maxHp = data.maxHp;
@@ -1081,6 +1123,7 @@ function addMessage(sender, text, isImage = false) {
                 if (data.skills) {
                     currentSkills = data.skills;
                     window.currentSkills = data.skills; // 👈 이 줄을 추가!
+
 }
                 
                 updateAllPanels();
@@ -1177,14 +1220,15 @@ function addMessage(sender, text, isImage = false) {
 </script>
 
 <div id="journal-modal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
-    <div style="background: var(--bg-beige); width: 85%; max-width: 900px; height: 80vh; border-radius: 12px; border: 4px solid var(--accent-blue-gray); display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
+    <div style="background: var(--bg-beige); width: 95%; max-width: 1100px; height: 80vh; border-radius: 12px; border: 4px solid var(--accent-blue-gray); display: flex; flex-direction: column; padding: 25px; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--accent-blue-gray); padding-bottom: 15px; margin-bottom: 20px;">
                 <h2 style="margin: 0; color: var(--text-black); display: flex; align-items: center; gap: 10px;">📖 모험 일지 (Adventure Journal)</h2>
                 <button onclick="closeJournal()" style="background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; height: auto;">닫기</button>
             </div>
 
-            <div style="flex: 1; display: flex; gap: 25px; overflow: hidden;">
-                <div style="flex: 1.2; display: flex; flex-direction: column;">
+            <div style="flex: 1; display: flex; gap: 20px; overflow: hidden;">
+                
+                <div style="flex: 1; display: flex; flex-direction: column;">
                     <h3 style="color: #333; border-left: 5px solid var(--accent-blue-gray); padding-left: 10px;">📜 주요 사건 기록</h3>
                     <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--bg-light-gray); padding: 15px; border-radius: 8px;">
                         <ul id="event-list-modal"></ul>
@@ -1197,6 +1241,14 @@ function addMessage(sender, text, isImage = false) {
                         <div id="quest-list-modal"></div>
                     </div>
                 </div>
+
+                <div style="flex: 1.2; display: flex; flex-direction: column;">
+                    <h3 style="color: #333; border-left: 5px solid #27ae60; padding-left: 10px;">👤 인물 및 동료 사전</h3>
+                    <div class="content-area" style="flex: 1; overflow-y: auto; background: var(--bg-light-gray); padding: 15px; border-radius: 8px;">
+                        <div id="character-list-modal"></div>
+                    </div>
+                </div>
+
             </div>
     </div>
 </div>

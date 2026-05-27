@@ -40,13 +40,14 @@ const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mong
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
     gold: { type: Number, default: 0 },
+    characters: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, 
+    party: { type: [String], default: [] }, // 현재 동료로 합류한 캐릭터 이름 목록
     skills: { type: [String], default: ['기본 공격'] },
     playerImageUrl: { type: String, default: null },
     equipment: { 
     type: Map, 
     of: String, 
-    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" },
-    characters: { type: Map, of: String, default: {} }
+    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" }
 },
     createdAt: { type: Date, default: Date.now },
     appearance: { type: String, default: "" },                                   // 👈 추가
@@ -169,6 +170,10 @@ app.get('/api/scenario/:id', async (req, res) => {
             playerImageUrl: scenario.playerImageUrl || null,
             equipment: scenario.equipment ? Object.fromEntries(scenario.equipment.entries()) : { "무기": "없음", "방어구": "없음", "장신구": "없음" },
             bestiary: (scenario.bestiary && typeof scenario.bestiary.entries === 'function') ? Object.fromEntries(scenario.bestiary.entries()) : (scenario.bestiary || {}),
+            party: scenario.party || [],
+            characters: (scenario.characters && typeof scenario.characters.entries === 'function') 
+                ? Object.fromEntries(scenario.characters.entries()) 
+                : (scenario.characters || {}),
             
             currentEnemy: scenario.currentEnemy || null
         });
@@ -246,6 +251,15 @@ app.post('/api/chat', async (req, res) => {
 
 // 💡 1. DB에서 도감 데이터를 가져옵니다.
         const currentBestiary = scenario.bestiary ? Object.fromEntries(scenario.bestiary.entries()) : {};
+
+        let currentCharsString = "없음";
+        if (scenario.characters && scenario.characters.size > 0) {
+            currentCharsString = Array.from(scenario.characters.entries()).map(([name, info]) => 
+                `[${name}] 정보:${info.desc}, 관계:${info.relation}, 위치:${info.location}`
+            ).join('\n');
+        }
+        
+        let currentPartyString = (scenario.party && scenario.party.length > 0) ? scenario.party.join(', ') : "나홀로 모험 중";
         
         // 💡 2. AI가 읽을 수 있도록 도감의 '상세 스펙'을 예쁘게 정리합니다.
         const bestiaryDetails = Object.entries(currentBestiary).map(([name, stats]) => 
@@ -266,6 +280,9 @@ app.post('/api/chat', async (req, res) => {
             - 체력: ${scenario.hp || 100} / ${scenario.maxHp || 100}
             - 착용 장비: ${currentEquipString}
             - 금화: ${scenario.gold || 0} G
+            - 세계관: ${scenario.worldSetting}
+            - 현재 동료(파티): ${currentPartyString}
+            - 주요 인물 도감:\n${currentCharsString}
             - 보유 스킬 (${(scenario.skills || []).length}/4개): ${(scenario.skills && scenario.skills.length > 0 ? scenario.skills.join(', ') : '없음')}`;
 
         const combatInfo = scenario.currentEnemy 
@@ -290,6 +307,10 @@ app.post('/api/chat', async (req, res) => {
         - 스킬 획득 시: [스킬추가: 스킬명]
         - 플레이어가 기술을 배울 때: [스킬획득: 스킬명(숫자)] (예: [스킬획득: 파이어볼(30)]) - 숫자는 데미지
         - 기존 스킬을 지울 때: [스킬삭제: 지울스킬명] (예: [스킬삭제: 파이어볼])
+        - 👤 인물 조우/정보 갱신: [인물등록: 이름|정보|주인공과의 관계|현재 위치]
+          (예: [인물등록: 타라|비밀을 간직한 마법사, 불을 다룸|경계함|어두운 숲])
+        - 🤝 동료 합류 시: [동료합류: 이름]
+        - 👋 동료 이탈 시: [동료이탈: 이름]
         - 새로운 몬스터 등장 시 도감에 등록: [도감등록: 몬스터명|체력|공격력|방어력|전리품명|드랍금화]
           (예: [도감등록: 다이어 울프|40|12|3|늑대 가죽|15])
           (🚨주의: 전투를 시작하기 전, 현재 도감 목록에 없는 새로운 적이라면 반드시 이 태그로 먼저 도감에 등록하세요.)
@@ -420,6 +441,49 @@ let isUpdated = false;
         const maxHpMatch = rawReply.match(/\[최대체력:\s*(\d+)\]/);
         const goldMatch = rawReply.match(/\[금화:\s*(\d+)\]/);
         
+        const charMatches = Array.from(rawReply.matchAll(/\[인물등록:\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^\]]+)\]/g));
+        if (charMatches.length > 0) {
+            if (!scenario.characters || typeof scenario.characters.set !== 'function') {
+                scenario.characters = new Map(Object.entries(scenario.characters || {}));
+            }
+            charMatches.forEach(m => {
+                const name = m[1].trim();
+                scenario.characters.set(name, {
+                    desc: m[2].trim(),
+                    relation: m[3].trim(),
+                    location: m[4].trim()
+                });
+                console.log(`👤 시스템: 인물 상세 정보 갱신 [${name}]`);
+            });
+            scenario.markModified('characters');
+            isUpdated = true;
+        }
+
+        // 🤝 [동료합류] 파티원 추가
+        const joinMatches = Array.from(rawReply.matchAll(/\[동료합류:\s*(.+?)\]/g));
+        if (joinMatches.length > 0) {
+            if (!scenario.party) scenario.party = [];
+            joinMatches.forEach(m => {
+                const name = m[1].trim();
+                if (!scenario.party.includes(name)) scenario.party.push(name);
+                console.log(`🤝 시스템: [${name}] 파티 합류!`);
+            });
+            isUpdated = true;
+        }
+
+        // 👋 [동료이탈] 파티원 제거
+        const leaveMatches = Array.from(rawReply.matchAll(/\[동료이탈:\s*(.+?)\]/g));
+        if (leaveMatches.length > 0) {
+            if (scenario.party) {
+                leaveMatches.forEach(m => {
+                    const name = m[1].trim();
+                    scenario.party = scenario.party.filter(p => p !== name);
+                    console.log(`👋 시스템: [${name}] 파티 이탈`);
+                });
+                isUpdated = true;
+            }
+        }
+
 
 
 
@@ -581,9 +645,14 @@ if (isUpdated) {
         }
 
         // 11. 클라이언트에 보낼 때 시스템 태그 싹 다 지우기 (스킬획득 태그도 화면에서 숨기도록 정규식 추가!)
-       const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|장비착용|이동|체력|최대체력|금화|스킬추가|스킬획득|스킬삭제|도감등록): .*?\]/g, "").trim();
+       const cleanReply = aiReplyWithDice.replace(/\[(요약|퀘스트|완료|아이템|아이템획득|아이템소모|장비착용|이동|체력|최대체력|금화|스킬추가|스킬획득|스킬삭제|도감등록|인물등록|동료합류|동료이탈): .*?\]/g, "").trim();
         return res.json({ 
-            reply: cleanReply, 
+            reply: cleanReply,
+            party: scenario.party || [],
+            characters: (scenario.characters && typeof scenario.characters.entries === 'function') 
+                ? Object.fromEntries(scenario.characters.entries()) 
+                : (scenario.characters || {}),
+
             diceValue: diceRoll,
             questLines: scenario.questLines,
             qquests: scenario.quests ? Object.fromEntries(scenario.quests.entries()) : {},

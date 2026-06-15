@@ -1,3 +1,12 @@
+<div align="center">
+
+<img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white"/>
+<img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black"/>
+<img src="https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white"/>
+
+
+
+</div>
 # AI 마스터가 진행해주는 웹 기반 TRPG 
 
 ## 실행 - https://trpg-3yyp.onrender.com/
@@ -282,10 +291,20 @@ graph TD
 
 ---
 
-## 🔮 Future Roadmap (향후 확장 계획)
+## ⚖️ 전체 시스템 아키텍처 트레이드오프 (System-wide Architecture Trade-off)
 
-* **비즈니스 로직 독창성 확보:** 본 프로젝트의 핵심인 **"DB 데이터 - 프롬프트 피드백 순환 구조(NER 기법 기반)"** 아키텍처 특허 출원 검토
-* **Spring Boot 마이그레이션:** 대규모 트래픽 대비 및 유지보수성 향상을 위해 거대한 `server.js`를 역할별로 쪼개는 아키텍처 재설계 계획 수립
-    * `Controller`: 프론트 접수 및 응답 처리
-    * `TRPGMasterService`: Spring AI 프레임워크 기반 LLM 연동 및 흐름 제어
-    * `TagParser`: 정규식 및 스트림 API를 활용한 태그 전문 분리 파서 컴포넌트 화
+본 프로젝트는 생성형 AI 기반의 실시간 TRPG 엔진을 안정적으로 구동하고 가변 데이터를 무결하게 영속화하기 위해, 각 레이어(프론트엔드, 백엔드, 데이터베이스, AI 오케스트레이션)별 기술 스택의 장단점을 면밀히 분석하고 의사결정을 수행했습니다.
+
+| 분류 | 채택한 기술 스택 (🟢) | 고려했던 대안 스택 (🔴) | 기술적 선택 이유 (Why Choose This?) | 감수한 한계 및 대응 전략 (Trade-off) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Frontend<br>UI/UX** | **Vanilla HTML5 / CSS3<br>& JavaScript (ES6+)** | **React / Vue.js<br>(Modern Framework)** | • 인게임 3단 고정 패널 레이아웃 및 윙 상태창 구축 시 불필요한 프레임워크 오버헤드 최소화<br>• 가벼운 가상 레이어 모달(Modal)과 비동기 `Fetch API` 조합으로 SPA 급의 반응성 확보 | • 컴포넌트 재사용성이 낮아질 위험이 있으나, UI 렌더링 모듈(`renderStatusContent()`)과 비동기 전처리 로직을 독자적 함수로 구조화하여 스크립트 오염 최소화 |
+| **Backend<br>Runtime** | **Node.js / Express** | **Java / Spring Boot** | • OpenAI/Gemini 공식 SDK 및 인프라와의 높은 연동 편의성<br>• 싱글 스레드 비동기 이벤트 루프 기반의 논블로킹 I/O 가 잦은 AI API 통신을 경량화하여 수용하기에 최적화 | • 서비스 비대화 시 계층 분리 누락으로 인한 코드 파편화 리스크 인지. 이를 방어하기 위해 라우터 모듈화 및 이미지 프록시 필터 단을 서버 상단에 전면 배치 |
+| **Database<br>Storage** | **MongoDB / Mongoose** | **MySQL / PostgreSQL<br>(Relational DB)** | • AI 가상 마스터가 실시간으로 가변 생성하는 비정형 문맥(대화 로그, 복합 구조 퀘스트 맵, 몬스터 스탯)을 고정 테이블(RDB)보다 기민하게 적재 가능 | • 관계형 조인(Join)의 부재는 Mongoose의 고유 `ref: 'User'` ObjectId 참조 설정을 통해 엄격한 수평적 권한 인가(`findOne({ _id, userId })`)를 구현해 극복 |
+| **Security<br>Auth** | **Passport.js &<br>Express-Session** | **JWT (JSON Web Token)<br>Stateless 토큰 인증** | • 클라이언트 측 스크립트 가로채기(XSS) 위협이 큰 JWT보다, 서버 측 메모리(`MemoryStore`)에서 세션 상태 무결성을 완전히 통제하여 보안 신뢰성 확보 | • 단일 프로세스 RAM 세션 관리로 인한 스케일 아웃 제한 경고 확인. 향후 서비스 확장 시 분산 인메모리 DB인 **Redis를 분산 세션 저장소로 이식**하는 확장 로드맵 수립 |
+
+| **DevOps<br>Workflow** | **GitHub Git Flow<br>(Squash Commit)** | **전체 커밋 이력<br>단순 푸시 (Push)** | • 노트북과 데스크톱 기기를 오가는 교차 원격 개발 환경 속에서 소스코드 휘발 리스크 헤징<br>• 이력서/포트폴리오 제출 시 커밋 히스토리의 세련된 가독성 확보 | • 로컬 머신과 원격 레포지토리 간의 역사가 꼬여 강제 푸시(`--force`)를 수반하는 정합성 예외 통제를 감수하고, 최종 저장소의 영혼까지 **단일 명품 커밋 라인으로 최적화 클렌징** 완수 
+
+---
+
+
+

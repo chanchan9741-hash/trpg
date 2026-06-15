@@ -12,9 +12,36 @@
     * **좌측 패널:** 플레이어 초상화, 실시간 HP 바, 금화(Gold) 정보, 4칸 스킬창 UI
     * **중앙 패널:** 청회색(플레이어) 및 흰색(마스터) 말풍선으로 정렬되는 실시간 채팅창
     * **우측 패널:** 현재 위치 지도 UI 및 모달 팝업 형태의 모험 일지/가방(인벤토리) 통합 관리
-* **시나리오 관리 및 완벽한 새 게임(Reset) 기능**
+## 📜 시나리오 및 세션 관리 시스템 (Scenario & Session Management)
+
+본 프로젝트는 단발성 채팅을 넘어, 플레이어만의 고유한 모험 세계관을 생성하고 영구적으로 보존 및 관리할 수 있는 **멀티 세션 시나리오 파이프라인**을 구축했습니다. 모든 데이터는 유저 고유 ID와 매칭되어 독립된 모험 레이어로 관리됩니다.
+
+### 🗺️ 핵심 관리 프로세스 및 데이터 흐름
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as 플레이어 (Client)
+    participant Server as Express 서버
+    participant DB as MongoDB (Mongoose)
+    participant AI as AI 마스터 (LLM)
+
+    Player->>Server: 1. 새로운 시나리오 생성 요청 (create.html)
+    Note over Server: 세계관, 캐릭터 외형/직업,<br/>원하는 일러스트 화풍 데이터 수집
+    Server->>DB: Scenario Schema에 데이터 영구 저장
+    DB-->>Server: 생성 완료 및 고유 Scenario ID 발급
+
+    Player->>Server: 2. 특정 시나리오 진입 및 채팅 입력 (/api/chat/:id)
+    Server->>DB: 해당 Scenario ID의 최근 대화 로그 & 상태(HP, Gold, 퀘스트) 조회
+    DB-->>Server: 컨텍스트 데이터 반환
+    Server->>AI: 과거 기록 10개 + 현재 입력값 압축 전달 (기억 이식)
+    AI-->>Server: 마스터의 다음 시나리오 서술 반환
+
+    Player->>Server: 3. 메인 화면에서 시나리오 삭제 요청
+    Server->>DB: Scenario.findByIdAndDelete() 수행
+    DB-->>Server: 해당 데이터셋 원천 제거 및 목록 갱신**시나리오 관리**
     * AI api를 통해 받은 텍스트를 기반으로 데이터 저장과 분류를 시행
-    * 모달의 답답함을 탈출한 단독 시나리오 생성/수정/삭제 전용 페이지 구축
+    * 
     * 시나리오 삭제 시 연관된 대화 로그(`Message` 컬렉션)까지 완벽하게 동시 삭제 (Cascade API)
     * 단순 로그 청소를 넘어 DB 수치(HP 100, 0G, 장소, 도감 등)를 초기화하고 브라우저를 리로드하는 '새 게임 시작' API 구현
 

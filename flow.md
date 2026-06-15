@@ -37,27 +37,3 @@ graph TD
     TP <-->|Mongoose ODM| DB
     DB --- SC & MS
     EX <-->|API Call| AI
-
-
-sequenceDiagram
-    autonumber
-    actor User as 플레이어 (Client)
-    participant Server as Express 서버
-    participant DB as MongoDB
-    participant AI as AI 마스터 (LLM)
-
-    User->>Server: 자연어 행동 명령어 입력 (/api/chat)
-    Note over Server: 1. Context History 조립 및<br>이미지 필터링 인터셉터 작동<br>(Base64 / HTTP 주소 원천 제거)
-    Server->>DB: 최근 대화 세션 로그 10개 조회
-    DB-->>Server: 필터링된 대화 내역 반환
-    
-    Note over Server: 2. System Prompt 및 State 결합<br>현재 시나리오 스펙 주입<br>(HP, Gold, 스킬, 병렬 퀘스트 맵)
-    Server->>AI: 압축된 컨텍스트 및 프롬프트 전송
-    AI-->>Server: 마스터 응답 문장 반환 (Raw Text)
-    
-    Note over Server: 3. Express TagParser 컴포넌트 작동<br>시스템 제어 특수 태그 분석<br>e.g., [도감등록: 멧돼지|30|8|2]<br>e.g., [상태변동: HP -15]
-    Server->>DB: Object.fromEntries 변환 후 가변 포장 처리 데이터 영구 저장
-    DB-->>Server: DB 동기화 완료 응답
-    
-    Server->>User: 파싱 완료된 순수 서술형 스토리 및 실시간 UI 업데이트 응답
-    Note over User: 채팅창 말풍선 정렬 및<br>HP 바 / 인벤토리 / 도감 동적 렌더링

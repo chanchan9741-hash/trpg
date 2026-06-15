@@ -36,7 +36,170 @@ sequenceDiagram
     DB-->>Server: 해당 데이터셋 원천 제거 및 목록 갱신
 ```
 
-### 🛠️ 주요 기능 기술 스펙 (Technical Specification)
+## 🛠️ 주요 기능 기술 스펙 (Technical Specification)
+
+
+### 프론트엔드 
+
+## 💻 프론트엔드 아키텍처 (Frontend Architecture)
+
+본 프로젝트의 클라이언트 단은 플레이어의 높은 몰입감을 위해 **다크 판타지 TRPG UI 테마**를 일관되게 유지하며, 비비동기(Async/Await) 통신을 기반으로 한 동적 UI 렌더링 및 실시간 상태 동기화 구조로 설계되었습니다.
+
+### 🔄 1. 화면 전환 및 데이터 흐름 (Screen Flow)
+
+사용자의 진입부터 게임 플레이, 세션 관리까지의 프론트엔드 내비게이션 및 API 연동 흐름은 다음과 같습니다.
+
+```mermaid
+graph TD
+    A[메인 화면: index.html] -->|보유 시나리오 목록 비동기 조회| B(fetchScenarios)
+    A -->|특정 시나리오 선택| C[인게임 화면: game.html]
+    A -->|새 모험 시작 버튼 클릭| D[세계관 설정 화면: create.html]
+    A -->|시나리오 삭제 버튼 클릭| E(DELETE API 호출 후 목록 리렌더링)
+    
+    D -->|세계관 / 캐릭터 외형 / 화풍 설정 입력| F(POST /api/scenario)
+    F -->|성공 시 생성된 ID 기반 라우팅| C
+    
+    C -->|초기 진입 시 과거 기록 복구| G(loadHistory)
+    C -->|사용자 채팅 입력| H(sendMessage)
+    H -->|AI 마스터 특수 태그 반환| I(TagParser 작동)
+    I -->|체력/골드/인벤토리 변동 감지| J(renderStatusContent)
+```
+
+### 컴포넌트 및 UI 구조 (UI Components)
+화면 가독성을 극대화하고 CRPG 특유의 인터페이스를 구현하기 위해 화면 레이아웃을 3가지 핵심 핵심 구역과 모달 컴포넌트로 분리하여 고정(position: absolute/fixed) 배치했습니다.
+
+### 메인 대시보드 (index.html)
+
+시나리오 카드 덱: 유저가 생성한 모험들의 정보(세계관, 타이틀)를 REST API로 긁어와 동적으로 카드 UI 형태로 렌더링합니다.
+
+제어 액션 컴포넌트: 각 시나리오 카드 내부에 인게임 진입 버튼과, 세션 데이터 원격 소거를 위한 [삭제] 버튼을 유기적으로 배치했습니다.
+
+### 인게임 화면 (game.html)
+
+메인 뷰 포트: AI 마스터가 서술하는 다크 판타지 배경 및 DALL-E 기반 삽화 이미지가 출력되는 중앙 스크린 영역입니다.
+
+사이드 윙 상태창 (#status-window): 화면 좌측 레이어에 반투명 양피지 테마로 고정되어, 실시간 데이터(HP 바, Gold 등)를 직관적으로 상시 노출합니다.
+
+하단 액션 대화창 (#chat-section): 플레이어의 행동 입력 양식(Input)과 AI 메시지 말풍선이 flex-direction: column 구조로 차곡차곡 스택되는 영속적 로그 컴포넌트입니다.
+
+모달 시스템 (#inventory-list-modal 등): 화면을 무겁게 차지하던 지저분한 사이드바를 제거하고, 확장형 인벤토리 및 AI가 동적으로 갱신한 몬스터 도감(bestiary)을 팝업 형태로 호출하여 깔끔한 화면 해상도를 확보했습니다.
+
+### 💾 3. 클라이언트 상태 관리 (Client State Management)
+데이터 분류와 저장을 통한 ai 영속성 유지
+
+
+데이터 영속성 및 동적 렌더링 다이어그램
+```mermaid
+    graph LR
+    subgraph Client_State [클라이언트 전역 데이터 구조]
+        direction TB
+        A[currentInventory: 배열/Map]
+        B[currentEvents: 요약 사건 배열]
+        C[currentQuests: 퀘스트 진행 맵]
+    end
+
+    subgraph Server_Sync [서버 데이터 동기화]
+        D[Express TagParser] -->|JSON Response| Client_State
+    end
+
+    subgraph UI_Render [UI 업데이트 파이프라인]
+        A -->|State Trigger| E(renderStatusContent)
+        B -->|State Trigger| F(renderModalContent)
+        C -->|State Trigger| G(renderQuestMarkers)
+    end
+```    
+### 핵심 상태 데이터 사양
+가변 데이터 전역 관리: currentInventory, currentEvents, currentQuests 변수를 전역 공간에 확보하여 AI 마스터와의 인터랙션 결과셋을 실시간 저장하는 1차 버퍼 역할을 수행합니다.
+
+새로고침 컨텍스트 유지: 브라우저 종료 및 새로고침(F5) 시 데이터가 휘발되는 문제를 차단하기 위해, 초기 구동 시 URL 경로에서 식별자 ID(window.location.pathname.split('/'))를 파싱하여 백엔드로부터 상태값과 과거 대화 데이터셋({ role, content })을 역추적해 다시 빌딩하는 영속성 파이프라인을 구축했습니다.
+
+데이터 바인딩 및 동기화 (renderStatusContent): 비동기 fetch 요청 완료 시 단순히 데이터만 변경하는 것이 아니라, UI 변경 이벤트 핸들러가 가동되어 체력 게이지 바(width %), 골드 지표텍스트, 퀘스트 수량이 동기화되어 화면에 즉각 리렌더링되도록 구현했습니다.
+
+
+## 🛡️ 백엔드 API & DB 인증/인가 시스템 (Authentication & Authorization)
+본 프로젝트는 안전한 사용자 데이터 관리와 시나리오 보호를 위해 구글 OAuth 2.0 기반의 인증과 Express-Session 메커니즘을 결합한 다중 보안 인가 체계를 구축했습니다. 타인의 시나리오 데이터나 모험 기록(데이터 무결성)을 완벽히 격리·보호하는 것을 핵심 목표로 합니다.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as 플레이어 (Client)
+    participant Server as Express 서버 (Backend)
+    participant Google as 구글 콘솔 (OAuth IDP)
+    participant DB as MongoDB Atlas
+
+    Note over Player, Google: [1단계] 구글 OAuth 2.0 인증 (Authentication)
+    Player->>Server: 로그인 요청 (/auth/google)
+    Server-->>Player: 구글 로그인 페이지로 리다이렉트
+    Player->>Google: 구글 계정 인증 및 권한 동의
+    Google-->>Server: 승인 코드 전달 (Callback URI)
+    Server->>Google: 승인 코드로 유저 프로필 정보 요청
+    Google-->>Server: 유저 이메일 및 프로필 데이터 반환
+
+    Note over Server, DB: [2단계] 사용자 DB 조회 및 세션 생성
+    Server->>DB: 기존 유저 여부 조회 (User.findOne)
+    alt 신규 사용자일 경우
+        Server->>DB: 새 회원 정보 생성 및 저장 (User.create)
+    end
+    DB-->>Server: 고유 회원 ObjectId 반환
+    Server->>Server: Express Session 생성 및 암호화
+    Server-->>Player: 브라우저 쿠키에 세션 ID 저장 및 메인화면 이동
+
+    Note over Player, DB: [3단계] 고유 세션 기반 API 접근 및 DB 인가 (Authorization)
+    Player->>Server: 시나리오 데이터 요청 (GET /api/scenario/:id)
+    Server->>Server: 미들웨어 인가 검증 (passport.isAuthenticated)
+    alt 인증 실패 (세션 만료 또는 무효)
+        Server-->>Player: 401 Unauthorized / 로그인 리다이렉트
+    else 인증 성공 (인가 처리)
+        Server->>DB: 시나리오 데이터 및 소유권 확인 (userId 대조)
+        DB-->>Server: 검증된 시나리오 데이터 반환
+        Server-->>Player: 상태창 및 데이터 바인딩 (JSON 응답)
+    end
+```    
+
+
+
+
+### 컴포넌트 간 데이터 보호 및 인가 구조 (Architecture Diagram)
+클라이언트의 요청이 어떤 보안 관문(인증 미들웨어, DB 소유권 검증)을 거쳐 데이터베이스에 도달하는지 보여주는 구조도입니다.
+
+```mermaid
+graph TD
+    %% 클라이언트 영역
+    subgraph Client [클라이언트 계층]
+        A[플레이어 브라우저] -->|1. API Request + Cookie| B(Express Router)
+    end
+
+    %% 백엔드 보안 영역
+    subgraph Backend [백엔드 보안 및 비즈니스 계층]
+        B -->|2. 인증 체크| C{Passport Middleware<br>isAuthenticated?}
+        
+        %% 인가 실패 라우트
+        C -->|No: 미인증 유저| D[401 Unauthorized<br>or 로그인 유도]
+        
+        %% 인가 성공 라우트
+        C -->|Yes: 인증 유저| E[req.user._id 추출]
+        E -->|3. 비즈니스 로직 수행| F[시나리오 라우터<br>/api/scenario/:id]
+        
+        %% 데이터베이스 인가 검증
+        F -->|4. 조건부 데이터 조회<br>userId 일치 여부 검증| G{DB 인가 관문<br>Strict Schema}
+    end
+
+    %% 데이터베이스 영역
+    subgraph CloudDB [데이터 무결성 및 저장소 계층]
+        G -->|소유권 유효| H[(MongoDB Atlas)]
+        G -->|소유권 불일치| I[404 Not Found<br>또는 권한 에러]
+        
+        H -->|User Collection| J[googleId, email, username]
+        H -->|Scenario Collection| K[userId 참조, worldSetting, quests Map]
+    end
+
+    %% 스타일링
+    style C fill:#f9f,stroke:#333,stroke-width:2px
+    style G fill:#ff9,stroke:#333,stroke-width:2px
+    style H fill:#9f9,stroke:#333,stroke-width:2px
+    style D fill:#f99,stroke:#333,stroke-width:1px
+    style I fill:#f99,stroke:#333,stroke-width:1px
+```
+
 
 1. 고유 세션 기반 시나리오 생성 (create.html & server.js)
 세계관 및 캐릭터 맞춤형 빌딩: 단순히 게임을 시작하는 것이 아니라, 시나리오 생성 단계에서 플레이어가 직접 세계관 배경(worldSetting), 캐릭터 정보(characterInfo), 캐릭터 외형(appearance) 및 일러스트 화풍(artStyle: 실사, 애니메이션, 판타지 유화 등)을 커스텀 설정할 수 있습니다.

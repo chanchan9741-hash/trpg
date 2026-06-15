@@ -1,6 +1,6 @@
-# ⚔️📜 AI-Driven Web TRPG Engine
+# AI 마스터가 진행해주는 웹 기반 TRPG 
 
-# 실행 - https://trpg-3yyp.onrender.com/
+## 실행 - https://trpg-3yyp.onrender.com/
 
 > **"DB 데이터 - 프롬프트 피드백 순환 구조(NER 기법)"** 기반의 독창적인 웹 기반 다크 판타지 TRPG 게임 엔진입니다. 유저의 선택과 AI 마스터의 상호작용을 실시간으로 정밀하게 제어하며, 몰입감 넘치는 텍스트 어드벤처 환경을 제공합니다.
 

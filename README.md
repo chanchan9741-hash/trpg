@@ -22,17 +22,18 @@
 
 
 
-## 🛠 Tech Stack (사용 기술)
+## 🛠 Tech Stack & Technical Decisions (사용 기술 및 채택 이유)
 
-| 분류 | 기술 스택 |
-| :--- | :--- |
-| **Front-end** | HTML5, CSS3, JavaScript (Vanilla/ES6+) |
-| **Back-end** | Node.js, Express |
-| **Database** | MongoDB, Mongoose ORM |
-| **Authentication** | Google OAuth 2.0 |
-| **AI Integration** | LLM API, NER(개체명 인식) 기반 프롬프트 엔지니어링 |
-
----
+| 분류 | 기술 스택 | 핵심 채택 이유 및 최적화 전략 |
+| :--- | :--- | :--- |
+| **Front-end** | HTML5, CSS3, JavaScript | 외부 무거운 프레임워크를 배제한 **Vanilla (ES6+) 환경**을 구성하여 경량화된 웹 UI를 구현했습니다. 실시간 캐릭터 상태 UI 변동 및 다크 판타지 컨셉의 3단 패널 레이아웃을 정밀 제어합니다. |
+| **Back-end** | Node.js, Express | AI API가 출력하는 대량의 텍스트 스트림을 실시간 가로채고(Intercept) 비동기로 파싱해야 하는 아키텍처 특성상, **이벤트 기반 비동기 처리**에 강력한 Express 환경을 구축했습니다. |
+| **Database** | MongoDB | 유저별로 소지 아이템 가방 데이터가 수시로 늘어나고, AI 마스터가 생성하는 난수형 몬스터 스펙(도감)이 비정형으로 변하는 TRPG 게임 데이터 특성에 가장 유연하게 대응하는 **NoSQL 구조**를 채택했습니다. |
+| **ORM** | Mongoose ODM | 비정형 데이터 모델 위에 스키마 유효성 검증을 더해 데이터 무결성을 보장합니다. 특히 고질적인 중복 아이템 스택 문제를 해결하고자 **Mongoose Map 구조**를 활용해 안전한 [Key-Value] 동동기화를 실현했습니다. |
+| **Authentication** | Google OAuth 2.0 | **Passport.js 및 express-session**을 결합하여 안전하고 표준화된 글로벌 인증 프로토콜을 탑재했습니다. 유저의 고유 구글 ID 값을 인게임 시나리오 세션과 완벽하게 매핑하는 기반이 됩니다. |
+| **AI Integration** | LLM API (OpenAI/Gemini) | 하드코딩된 대사 분기 방식의 한계를 깨고 자유도 높은 텍스트 롤플레잉 환경을 만들기 위해 엔진의 핵심 심장부로 탑재했습니다. 비용 폭탄을 막기 위해 **5턴 단위 시나리오 핵심 사건 요약(Snapshot) 주입 메커니즘**을 연동했습니다. |
+| **Multimodal** | DALL-E 3 (순천향대) | 유저가 설정한 캐릭터 외형 및 화풍 선택 데이터(실사, 애니, 유화 등)를 이미지 생성 프롬프트 파이프라인에 동적으로 융합하여, 플레이어 맞춤형 상황 삽화를 실시간 자동 렌더링하도록 연동했습니다. |
+| **Migration** *(Target)* | Spring Boot | 1인 개발 단위로 비대해진 자바스크립트 모놀리식 단일 파일(`server.js`)을 엄격히 계층화하고자 마이그레이션 설계를 마쳤습니다. **Spring Data MongoDB 및 Stream API 기반 TagParser 컴포넌트**로 고도화할 예정입니다. |
 
 ## 💾 Data Architecture (데이터 구조)
 

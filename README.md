@@ -7,11 +7,56 @@
 
 
 </div>
-# AI 마스터가 진행해주는 웹 기반 TRPG 
 
-## 실행 - https://trpg-3yyp.onrender.com/
-
+#  AI 마스터가 진행해주는 웹 기반 TRPG 
 > **"DB 데이터 - 프롬프트 피드백 순환 구조(NER 기법)"** 기반의 웹 기반 TRPG 게임 엔진입니다. 유저의 선택과 AI 마스터의 상호작용을 실시간으로 정밀하게 제어하며, 몰입감 넘치는 텍스트 어드벤처 환경을 제공합니다.
+
+
+## 웹 페이지로 사용하기 - https://trpg-3yyp.onrender.com/
+
+## 🚀 Getting Started (설치 및 실행 방법)
+
+본 프로젝트를 로컬(Local) 환경에서 다운로드하고 직접 실행하는 방법입니다. 
+`.env` 파일과 `node_modules`는 보안 및 용량 최적화를 위해 포함되어 있지 않으므로, 아래 순서에 따라 수동 설정을 진행해 주세요.
+
+### 📋 1. 사전 요구사항 (Prerequisites)
+프로젝트를 실행하기 위해 컴퓨터에 아래 프로그램들이 설치되어 있어야 합니다.
+* **Node.js**: v18.x 이상 버전 권장 ([다운로드](https://nodejs.org/))
+* **MongoDB**: MongoDB Atlas 클라우드 계정 또는 로컬 MongoDB 인프라
+* **AI API Credentials**: OpenAI API 키 및 구글 OAuth 사용자 인증 정보
+
+### 🛠️ 2. 설치 및 빌드 (Installation)
+
+1. **저장소 복제 (Repository Clone)**
+   깃허브 코드를 본인의 PC로 복사해옵니다.
+   ```bash
+   git clone [https://github.com/chanchan9741-hash/trpg.git](https://github.com/chanchan9741-hash/trpg.git)
+   cd trpg
+
+2. 의존성 라이브러리 패키지 설치
+package.json 영수증을 기반으로 프로젝트에 필요한 Express, Mongoose, Passport 등의 패키지를 새로 다운로드합니다.
+    ```bash 
+    npm install    
+3. 환경 변수 설정 (Environment Variables)
+    ```bash
+    프로젝트 루트 디렉토리(최상위 폴더)에 .env 라는 이름의 파일을 새로 만들고, 본인의 API 키와 DB 주소를 아래 형식에 맞추어 입력해 주세요.
+
+    PORT=3000
+    MONGODB_URI=your_mongodb_connection_string
+    SCH_AIHUB_API_KEY=your_sch_aihub_api_key
+    GOOGLE_CLIENT_ID=your_google_client_id
+    GOOGLE_CLIENT_SECRET=your_google_client_secret
+    SESSION_SECRET=your_custom_session_secret_key
+    ** 구글 클라우드 콘솔의 사용자 인증 정보에서 '승인된 리디렉션 URI'에 http://localhost:3000/auth/google/callback이 반드시 등록되어 있어야 로그인이 정상 작동합니다. **
+4. 서버 실행 (Running the Server)
+모든 세팅이 끝났다면 터미널에 아래 명령어를 입력해 Express 서버를 구동합니다.
+    ```bash
+    #개발용 실시간 리로드 실행 (Nodemon 기반)
+    npm run dev
+
+    #또는 일반 서버 구동
+    npm start
+
 
 ---
 

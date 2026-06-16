@@ -1,11 +1,16 @@
 <img src="https://img.shields.io/badge/MongoDB-47A148?style=for-the-badge&logo=mongodb&logoColor=white"> <img src="https://img.shields.io/badge/Passport.js-34E27A?style=for-the-badge&logo=passport&logoColor=black"> <img src="https://img.shields.io/badge/Google_OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white">
 
 
-# 📊 AI TRPG Engine: Architecture & Data Flow Specification
+# 데이터 흐름 구조
+## 💾 Data Architecture (데이터 구조)
 
-> 본 문서는 AI 기반 다크 판타지 TRPG 게임 엔진의 데이터 런타임 생명 주기, 상태 동기화 파이프라인, 그리고 예외 제어 흐름을 도식화한 공식 데이터 명세서입니다.
+* **인증 및 계정 데이터:** Google OAuth 2.0을 통해 전달받는 유저 식별 정보(`googleId`, `username`, `email`) 기반의 세션 관리
+* **실시간 인게임 상태(State):** 플레이어의 실시간 변동 데이터 (`hp`, `gold`, 최대 4개의 `skills`)
+* **구조화된 인벤토리 (Mongoose Map Stack):** 자바스크립트 Map 객체를 활용하여 `{"체력 포션": 3, "롱소드": 1}` 형태의 **[아이템명: 수량]** Key-Value 스택 관리
+* **실시간 몬스터 도감(Bestiary):** AI가 생성한 적의 스펙(`name`, `hp`, `atk`, `def`, `loot`)을 실시간 DB 동기화
+* **대화 및 이미지 로그:** 타임스탬프 기반 컬렉션(`Message`)을 통해 텍스트 로그 및 동적 생성 삽화 URL(Base64) 관리
 
----
+
 
 ## 1. 🔄 실시간 대화 및 데이터 순환 흐름 (Core Sequence)
 

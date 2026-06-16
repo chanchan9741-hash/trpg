@@ -109,6 +109,12 @@ sequenceDiagram
   </a>
 </p>
 
+<p align="center">
+  <a href="./Readme/flow.md" style="text-decoration:none;">
+    <img src="https://img.shields.io/badge/💻_데이터 흐름 제어-FF9900?style=for-the-badge&logoColor=white" width="400px" />
+  </a>
+</p>
+
 
 ## 🛠️ 기술 스택 스펙트럼 및 채택 이유 (Tech Stack)
 
@@ -125,35 +131,36 @@ sequenceDiagram
 
 
 
-## 💾 Data Architecture (데이터 구조)
 
-* **인증 및 계정 데이터:** Google OAuth 2.0을 통해 전달받는 유저 식별 정보(`googleId`, `username`, `email`) 기반의 세션 관리
-* **실시간 인게임 상태(State):** 플레이어의 실시간 변동 데이터 (`hp`, `gold`, 최대 4개의 `skills`)
-* **구조화된 인벤토리 (Mongoose Map Stack):** 자바스크립트 Map 객체를 활용하여 `{"체력 포션": 3, "롱소드": 1}` 형태의 **[아이템명: 수량]** Key-Value 스택 관리
-* **실시간 몬스터 도감(Bestiary):** AI가 생성한 적의 스펙(`name`, `hp`, `atk`, `def`, `loot`)을 실시간 DB 영구 동기화
-* **대화 및 이미지 로그:** 타임스탬프 기반 컬렉션(`Message`)을 통해 텍스트 로그 및 동적 생성 삽화 URL(Base64) 관리
 
----
+## ⚡ Troubleshooting & Issue Resolution (핵심 버그 해결 내역)
 
-## ⚡ Troubleshooting & Optimization (주요 버그 수정 내역)
+본 프로젝트를 진행하며 겪은 치명적인 기술적 이슈들과 이를 논리적 파이프라인으로 해결한 내역입니다.
 
-### 1. Mongoose Map 객체 데이터 소화 불량 해결
-* **문제:** MongoDB가 자바스크립트 내장 Map 데이터를 수동으로 덮어쓸 때 데이터가 유실되는 현상 발생.
-* **해결:** `Object.fromEntries(map.entries())` 객체 변환 포장 처리를 통해 DB 저장 및 프론트 전송 안정성 100% 확보.
+### 1. ❌ 400 Bad Request (Payload Too Large) 에러 차단
+* **발생 원인:** 멀티모달 기능(DALL-E 3)으로 생성된 대용량 삽화의 **Base64 암호문 덩어리**가 과거 대화 히스토리(`Buffer`)에 그대로 누적되어 LLM 백본 API로 재전송되면서, AI 인프라의 토큰 한도 및 데이터 용량 제한을 초과해 서버가 완전히 마비되는 현상이 발생했습니다.
 
-### 2. "게임을 시작해줘" 오프닝 무한 증식 버그 수정
-* **문제:** 새로고침 시 초기 데이터 공백을 인지하고 `start()` 오프닝 서술 함수가 중복 실행되는 현상.
-* **해결:** 첫 질문은 DB에 남기지 않고 깔끔하게 오프닝 타이밍만 잡도록 로직 정비.
+* **해결 로직 (인터셉터 필터 적용):** AI에게 이전 대화 내역(`History`)을 넘겨주기 전, 배열을 순회하며 데이터 형식을 스캔하는 전처리 파이프라인을 배치했습니다. 원문 텍스트가 `startsWith('data:image')` 또는 `startsWith('http')` 조건을 만족하면 히스토리 빌더에서 강제로 제외(`Skip`)시킴으로써 토큰 비용 폭탄을 방어하고 API 안정성을 확보했습니다.
 
-### 3. AI 컨텍스트 토큰 초과(400 Bad Request) 에러 원천 차단
-* **문제:** 생성된 삽화의 거대한 Base64 암호문 덩어리가 AI 대화 히스토리에 그대로 묶여 들어가 토큰 한도를 초과하는 현상 (`PayloadTooLargeError`).
-* **해결:** AI에게 컨텍스트를 보낼 때 `startsWith('data:image')` 및 `startsWith('http')`를 걸러내는 데이터 필터링 파이프라인 배치로 에러 원인 제거.
+### 2. ❌ Mongoose Map 데이터 유실 및 가변 동기화 오류
+* **발생 원인:** MongoDB 스키마 내부에서 플레이어의 인벤토리(가방) 수량 누적(Stack) 관리와 AI가 생성한 적 유닛 스펙인 몬스터 도감(`bestiary`)을 자바스크립트 내장 `Map` 객체로 적재 시, Mongoose ODM이 변경 사항을 제대로 감지하지 못해 데이터가 무시되거나 증발하는 고질적인 동기화 버그가 있었습니다.
+* **해결 로직 (하이브리드 객체 패킹 변환):** 메모리 단에서 가변 제어(`set`)가 끝난 데이터를 `findByIdAndUpdate` 등으로 무겁게 던지는 대신, 데이터베이스 영구 저장소에 들어가기 직전 `Object.fromEntries(scenario.bestiary.entries())` 가변 포장 처리 함수를 수행하여 무결한 JSON 오브젝트 형식으로 인코딩하여 영구 적재 및 동동기화 안정성을 100% 실현했습니다.
 
-### 4. 비동기 타이밍 및 중복 선언(SyntaxError) 정비
-* **문제:** 코드 확장 과정에서 `Scenario has already been declared` 등의 변수 중복 선언 및 자바스크립트 비동기 순서 뒤틀림 발생.
-* **해결:** 스코프 정비 및 비동기 흐름(`async/await`) 구조 통합 정리.
+### 3. 🔄 새로고침 시 오프닝(Start) 서술 무한 증식 버그
+* **발생 원인:** 사용자가 인게임 화면에서 새로고침(F5)을 누를 때마다, 초기 데이터 공백을 인지한 시스템이 오프닝 서술 함수인 `start()`를 중복 구동시켜 채팅창에 "게임을 시작해줘"라는 시스템 프롬프트 로그가 무한대로 누적되는 현상이 발견되었습니다.
+* **해결 로직 (세션 및 데이터 스코프 정비):** `window.onload` 시점에 대화 로그를 불러오는 `loadHistory()` 내부 로직을 통합 개조했습니다. 데이터베이스의 `Message.countDocuments` 값을 기준으로 과거 기록이 0개일 때만 순수 첫 타이밍 스위치(`isFirstMessage`)를 가동하여 오프닝을 유도하고, 첫 시스템 질문은 DB 로그에 남기지 않고 클라이언트 메모리 단에서 처리하도록 제한하여 증식 문제를 원천 차단했습니다.
+
+### 4. ❌ 변수 중복 선언(SyntaxError) 및 비동기 ReferenceError 수선
+* **발생 원인:** 기능 확장(시나리오 삭제 전용 Cascade API 구현 및 캐릭터 외형/화풍 설정 기능 추가) 과정에서 자바스크립트 변수 범위(`Scope`)와 비동기(`async/await`) 흐름 순서가 뒤틀리며 `Scenario has already been declared` 같은 문법 에러 및 데이터를 받기도 전에 URL을 꺼내 써서 서버가 다운되는 타이밍 버그가 빈번하게 발생했습니다.
+* **해결 로직 (비동기 파이프라인 단일화 및 스코프 격리):**
+  방 번호(`scenarioId`)를 전역 영역으로 안전하게 탈출시켜 세션이 끊겨도 함수들이 방 번호를 온전히 기억하도록 설계를 정비했습니다. 또한, 이미지 렌더링 시 반드시 `await response.json()`을 완전히 완료하여 완벽한 `data 꾸러미`를 보장받은 직후에만 내부 변수를 디코딩하도록 동기화 타이밍 스코프를 완전히 통합 정리했습니다.
 
 ---
+
+
+
+
+
 
 ## ⚖️ 전체 시스템 아키텍처 트레이드오프 (System-wide Architecture Trade-off)
 

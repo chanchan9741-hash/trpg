@@ -1,12 +1,17 @@
-<div align="center">
+### 🧰 Tech Stack
 
-<img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white"/>
-<img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black"/>
-<img src="https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white"/>
-
-
-
-</div>
+<p align="left">
+  <img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white">
+  <img src="https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white">
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black">
+  <br>
+  <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white">
+  <img src="https://img.shields.io/badge/Spring_Boot-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+  <img src="https://img.shields.io/badge/MongoDB-47A148?style=for-the-badge&logo=mongodb&logoColor=white">
+  <br>
+  <img src="https://img.shields.io/badge/OpenAI_API-412991?style=for-the-badge&logo=openai&logoColor=white">
+  <img src="https://img.shields.io/badge/Google_OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white">
+</p>
 
 #  AI 마스터가 진행해주는 웹 기반 TRPG 
 > **"DB 데이터 - 프롬프트 피드백 순환 구조(NER 기법)"** 기반의 웹 기반 TRPG 게임 엔진입니다. 유저의 선택과 AI 마스터의 상호작용을 실시간으로 정밀하게 제어하며, 몰입감 넘치는 텍스트 어드벤처 환경을 제공합니다.
@@ -161,9 +166,6 @@ sequenceDiagram
 | **Database<br>Storage** | **MongoDB / Mongoose** | **MySQL / PostgreSQL<br>(Relational DB)** | • AI 가상 마스터가 실시간으로 가변 생성하는 비정형 문맥(대화 로그, 복합 구조 퀘스트 맵, 몬스터 스탯)을 고정 테이블(RDB)보다 기민하게 적재 가능 | • 관계형 조인(Join)의 부재는 Mongoose의 고유 `ref: 'User'` ObjectId 참조 설정을 통해 엄격한 수평적 권한 인가(`findOne({ _id, userId })`)를 구현해 극복 |
 | **Security<br>Auth** | **Passport.js &<br>Express-Session** | **JWT (JSON Web Token)<br>Stateless 토큰 인증** | • 클라이언트 측 스크립트 가로채기(XSS) 위협이 큰 JWT보다, 서버 측 메모리(`MemoryStore`)에서 세션 상태 무결성을 완전히 통제하여 보안 신뢰성 확보 | • 단일 프로세스 RAM 세션 관리로 인한 스케일 아웃 제한 경고 확인. 향후 서비스 확장 시 분산 인메모리 DB인 **Redis를 분산 세션 저장소로 이식**하는 확장 로드맵 수립 |
 
-| **DevOps<br>Workflow** | **GitHub Git Flow<br>(Squash Commit)** | **전체 커밋 이력<br>단순 푸시 (Push)** | • 노트북과 데스크톱 기기를 오가는 교차 원격 개발 환경 속에서 소스코드 휘발 리스크 헤징<br>• 이력서/포트폴리오 제출 시 커밋 히스토리의 세련된 가독성 확보 | • 로컬 머신과 원격 레포지토리 간의 역사가 꼬여 강제 푸시(`--force`)를 수반하는 정합성 예외 통제를 감수하고, 최종 저장소의 영혼까지 **단일 명품 커밋 라인으로 최적화 클렌징** 완수 
-
----
 
 
 

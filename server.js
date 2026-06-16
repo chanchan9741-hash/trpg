@@ -195,8 +195,8 @@ app.post('/api/scenarios', async (req, res) => {
         title: req.body.title,
         worldSetting: req.body.worldSetting,
         characterInfo: req.body.characterInfo,
-        appearance: req.body.appearance,  // 👈 추가: 프론트에서 보낸 외형 데이터
-        artStyle: req.body.artStyle       // 👈 추가: 프론트에서 보낸 화풍 데이터
+        appearance: req.body.appearance,   
+        artStyle: req.body.artStyle        
     });
     await newScenario.save();
     res.json({ success: true });

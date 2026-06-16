@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Google_OAuth-4285F4?style=for-the-badge&logo=google&logoColor=white">
 </p>
 
-#  AI 마스터가 진행해주는 웹 기반 TRPG 테스트
+#  AI 마스터가 진행해주는 웹 기반 TRPG 
 > **"DB 데이터 - 프롬프트 피드백 순환 구조(NER 기법)"** 기반의 웹 기반 TRPG 게임 엔진입니다. 유저의 선택과 AI 마스터의 상호작용을 실시간으로 정밀하게 제어하며, 몰입감 넘치는 텍스트 어드벤처 환경을 제공합니다.
 
 

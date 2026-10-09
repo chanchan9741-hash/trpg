@@ -1112,7 +1112,17 @@ async function handleDrop(event, part) {
         }
     }
 
-function addMessage(sender, text, isImage = false) {
+    function isImageUrl(str) {
+        if (typeof str !== 'string') return false;
+        str = str.trim();
+        return str.startsWith('data:image') || 
+               str.startsWith('/image/') || 
+               str.startsWith('http://') || 
+               str.startsWith('https://') || 
+               /\.(png|jpe?g|webp|gif)$/i.test(str.split('?')[0]);
+    }
+
+    function addMessage(sender, text, isImage = false) {
         // 🚨 [핵심 추가] 텍스트가 '[시스템]'으로 시작하면 화면에 아예 그리지 않고 몰래 함수를 끝냅니다!
         if (typeof text === 'string' && text.startsWith('[시스템]')) {
             return; 
@@ -1122,9 +1132,11 @@ function addMessage(sender, text, isImage = false) {
         const div = document.createElement('div');
         div.className = `msg ${isBot ? 'master' : 'player'}`;
         
-        if (isImage || (typeof text === 'string' && text.startsWith('http'))) {
-            const imgSrc = text.includes('<img') ? text.match(/src=["']([^"']+)["']/)[1] : text;
-            div.innerHTML = `<strong>${sender}</strong>: <br><img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer;">`;
+        if (isImage || isImageUrl(text)) {
+            const imgSrc = (typeof text === 'string' && text.includes('<img')) 
+                ? text.match(/src=["']([^"']+)["']/)[1] 
+                : text;
+            div.innerHTML = `<strong>${sender}</strong>: <br><img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer; max-width:320px; border-radius:8px; margin-top:8px;">`;
         } else {
             const hasDice = typeof text === 'string' && (text.startsWith('🎲') || text.includes('[설득 굴림:'));
             div.innerText = `${sender}: ${typeof text === 'string' && text.startsWith('🎲') ? text.replace(/^🎲\s*/, '') : text}`;
@@ -1148,7 +1160,7 @@ function addMessage(sender, text, isImage = false) {
                     const isUser = msg.role === 'user' || msg.role === 'player';
                     const senderName = isUser ? '나' : '마스터';
                     const content = msg.content || "내용이 없는 메시지입니다.";
-                    const isImg = content.startsWith('http') || content.startsWith('data:image');
+                    const isImg = isImageUrl(content);
                     addMessage(senderName, content, isImg);
                 });
             } else {

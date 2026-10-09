@@ -646,6 +646,16 @@
             }
         }
 
+        function isImageUrl(str) {
+            if (typeof str !== 'string') return false;
+            str = str.trim();
+            return str.startsWith('data:image') || 
+                   str.startsWith('/image/') || 
+                   str.startsWith('http://') || 
+                   str.startsWith('https://') || 
+                   /\.(png|jpe?g|webp|gif)$/i.test(str.split('?')[0]);
+        }
+
         // 2. 메시지 화면 표시 함수
         function appendMessage(sender, text, isImage = false) {
             if (typeof text === 'string' && text.startsWith('[시스템]')) return;
@@ -659,9 +669,11 @@
                 : '';
 
             let bubbleContent = '';
-            if (isImage || (typeof text === 'string' && text.startsWith('http'))) {
-                const imgSrc = text.includes('<img') ? text.match(/src=["']([^"']+)["']/)[1] : text;
-                bubbleContent = `<img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer;" title="클릭하여 원본 보기">`;
+            if (isImage || isImageUrl(text)) {
+                const imgSrc = (typeof text === 'string' && text.includes('<img')) 
+                    ? text.match(/src=["']([^"']+)["']/)[1] 
+                    : text;
+                bubbleContent = `<img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer; max-width:100%; border-radius:10px; display:block;" title="클릭하여 원본 보기">`;
             } else {
                 bubbleContent = escapeHtml(text).replace(/\n/g, '<br>');
             }
@@ -698,7 +710,7 @@
                         const isUser = (msg.role === 'user' || msg.role === 'player');
                         const sender = isUser ? '나' : characterName;
                         const content = msg.content || '';
-                        const isImg = content.startsWith('http') || content.startsWith('data:image');
+                        const isImg = isImageUrl(content);
                         appendMessage(sender, content, isImg);
                     });
                 } else {

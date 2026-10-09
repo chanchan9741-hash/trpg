@@ -360,7 +360,7 @@
                     const result = await response.json();
                     alert(currentMode === 'chatbot' ? "✨ 캐릭터 챗봇이 생성되었습니다!" : "⚔️ 새 모험 시나리오가 저장되었습니다!");
                     if (result.scenarioId) {
-                        location.href = `/game/${result.scenarioId}`;
+                        location.href = (currentMode === 'chatbot' ? `/chat/${result.scenarioId}` : `/game/${result.scenarioId}`);
                     } else {
                         location.href = '/';
                     }

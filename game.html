@@ -330,34 +330,15 @@
                 </button>
             </div>
 
-            <div id="dice-area">
-                <div id="dice-box" style="width: 60px; height: 60px; background: var(--surface); color: var(--text-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; border-radius: 10px; border: 2px solid var(--border-strong); margin: 0 auto;">?</div>
-                <p id="dice-status" style="font-size: 0.9rem; margin-top: 10px; margin-bottom: 0; color: var(--text-primary); font-weight: bold;">판정 대기 중...</p>
-            </div>
-        </div>
-
-        <!-- 💬 인물 챗봇 (제타) 전용 프로필 카드 -->
-        <div id="chatbot-profile-section" style="display: none; flex-direction: column; flex: 1; overflow: hidden; gap: 10px;">
-            <div class="panel-title" style="margin-bottom: 6px;"><i class="bi bi-person-heart" style="color: #FF5A79;"></i> 캐릭터 프로필</div>
-            <div class="content-area" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 0.88rem; padding: 12px;">
-                <div>
-                    <strong style="color: var(--brand); display: block; margin-bottom: 3px;"><i class="bi bi-sparkles"></i> 성격 & 말투</strong>
-                    <div id="bot-personality" style="line-height: 1.5; color: var(--text-primary); background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);"></div>
+            <div id="dice-area" style="text-align: center; background: var(--bg-light-gray); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                <div style="font-weight: bold; font-size: 0.95rem; margin-bottom: 8px; color: var(--text-black); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-dice-5-fill" style="color: var(--brand);"></i> 설득 굴림 (D20)
                 </div>
-                <div>
-                    <strong style="color: var(--accent-blue-gray); display: block; margin-bottom: 3px;"><i class="bi bi-compass"></i> 관계 & 배경</strong>
-                    <div id="bot-relation" style="line-height: 1.5; color: var(--text-primary); background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border);"></div>
-                </div>
-                <div>
-                    <strong style="color: #9333EA; display: block; margin-bottom: 3px;"><i class="bi bi-person-lines-fill"></i> 외형 묘사</strong>
-                    <div id="bot-appearance" style="line-height: 1.5; color: var(--text-secondary); background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem;"></div>
-                </div>
-                <div>
-                    <strong style="color: #00B58B; display: block; margin-bottom: 3px;"><i class="bi bi-chat-quote"></i> 최근 대화 기억</strong>
-                    <div id="bot-memories" style="line-height: 1.45; color: var(--text-secondary); background: var(--surface); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.82rem; max-height: 120px; overflow-y: auto;">
-                        <span style="opacity: 0.6;">대화가 진행되면 기억이 기록됩니다.</span>
-                    </div>
-                </div>
+                <div id="dice-box" onclick="rollPersuasionDice()" title="클릭하여 설득 주사위 굴리기" style="width: 60px; height: 60px; background: var(--surface); color: var(--text-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; border-radius: 10px; border: 2px solid var(--border-strong); margin: 0 auto; cursor: pointer; transition: transform 0.15s;">?</div>
+                <p id="dice-status" style="font-size: 0.85rem; margin-top: 8px; margin-bottom: 8px; color: var(--text-primary); font-weight: bold;">설득 판정 대기 중...</p>
+                <button onclick="rollPersuasionDice()" style="width: 100%; padding: 8px; background: var(--brand); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; transition: opacity 0.2s;">
+                    <i class="bi bi-dice-5"></i> D20 주사위 굴리기
+                </button>
             </div>
         </div>
     </div>
@@ -367,6 +348,9 @@
         <div id="chat-window"></div>
         <div id="input-area">
             <input type="text" id="user-input" placeholder="시나리오를 진행하여 주세요." onkeypress="if(event.key === 'Enter') send()">
+            <button onclick="rollPersuasionDice()" title="D20 설득 주사위를 굴리고 설득을 시도합니다" style="background: #D68B00; color: white; border: none; border-radius: 8px; padding: 14px 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
+                <i class="bi bi-dice-5-fill"></i> 설득
+            </button>
             <button id="send-btn">전송</button>
             <button id="img-btn" onclick="generateImage()" style="background: var(--chat-user);">그림</button>
         </div>
@@ -597,10 +581,7 @@ function updateEnemyUI(enemyData) {
     // 🎨 사진 생성 (액자 클릭 시 실행)
     async function generatePlayerImage() {
         if (!scenarioId) return;
-        const confirmMsg = (scenarioMode === 'chatbot') 
-            ? `'${characterName}'의 캐릭터 프로필 일러스트를 새로 그릴까요?` 
-            : "주인공 설정을 바탕으로 초상화를 그려낼까요?";
-        if (!confirm(confirmMsg)) return;
+        if (!confirm("주인공 설정을 바탕으로 초상화를 그려낼까요?")) return;
 
         const loader = document.getElementById('profile-loading');
         loader.style.display = 'flex'; // 로딩 화면 표시
@@ -668,8 +649,8 @@ function updateEnemyUI(enemyData) {
     function animateDice(finalValue) {
         if (!diceBox || !diceStatus) return;
         diceBox.classList.add('rolling');
-        diceStatus.innerText = "운명을 결정하는 중...";
-        diceStatus.style.color = "#1A1918";
+        diceStatus.innerHTML = '<i class="bi bi-dice-5"></i> 설득 주사위 굴리는 중...';
+        diceStatus.style.color = "var(--text-primary)";
         
         let count = 0;
         const interval = setInterval(() => {
@@ -679,16 +660,50 @@ function updateEnemyUI(enemyData) {
                 clearInterval(interval);
                 diceBox.classList.remove('rolling');
                 diceBox.innerText = finalValue;
-                diceStatus.innerHTML = finalValue >= 10 ? '<i class="bi bi-check-circle-fill" style="color:#2CAA00;"></i> 판정 성공!' : '<i class="bi bi-x-circle-fill" style="color:#FA4520;"></i> 판정 실패...';
-                diceBox.style.background = finalValue >= 10 ? "#2CAA00" : "#FA4520";
-                diceBox.style.color = "white";
+                
+                if (finalValue === 20) {
+                    diceStatus.innerHTML = `<span style="color:#D68B00; font-weight:bold;"><i class="bi bi-stars"></i> [${finalValue}] 대성공! (Critical)</span>`;
+                    diceBox.style.background = "#FFB938";
+                    diceBox.style.color = "#1A1918";
+                } else if (finalValue >= 10) {
+                    diceStatus.innerHTML = `<span style="color:#2CAA00; font-weight:bold;"><i class="bi bi-check-circle-fill"></i> [${finalValue}] 설득 성공! (DC 10)</span>`;
+                    diceBox.style.background = "#2CAA00";
+                    diceBox.style.color = "white";
+                } else if (finalValue === 1) {
+                    diceStatus.innerHTML = `<span style="color:#9E0000; font-weight:bold;"><i class="bi bi-exclamation-triangle-fill"></i> [${finalValue}] 펌블! (대실패)</span>`;
+                    diceBox.style.background = "#9E0000";
+                    diceBox.style.color = "white";
+                } else {
+                    diceStatus.innerHTML = `<span style="color:#FA4520; font-weight:bold;"><i class="bi bi-x-circle-fill"></i> [${finalValue}] 설득 실패... (DC 10)</span>`;
+                    diceBox.style.background = "#FA4520";
+                    diceBox.style.color = "white";
+                }
                 
                 setTimeout(() => { 
                     diceBox.style.background = "var(--surface)"; 
                     diceBox.style.color = "var(--text-primary)"; 
-                }, 3000);
+                }, 3500);
             }
         }, 50);
+    }
+
+    function rollPersuasionDice() {
+        const roll = Math.floor(Math.random() * 20) + 1;
+        animateDice(roll);
+
+        const currentText = userInput.value.trim();
+        let promptText = "";
+        if (currentText) {
+            promptText = currentText;
+            userInput.value = "";
+        } else {
+            const inputIntent = prompt("어떤 내용으로 상대를 설득하시겠습니까?\n(예: 의심을 풀도록 능청스럽게 둘러댄다 / 상인을 설득해 할인을 받는다)", "상대를 말솜씨로 설득해 호의를 얻는다.");
+            if (!inputIntent) return;
+            promptText = inputIntent;
+        }
+
+        const fullMessage = `[설득 굴림: ${roll}] ${promptText}`;
+        send(fullMessage, roll);
     }
 
     // 상태창 화면 업데이트 함수
@@ -1030,72 +1045,40 @@ async function handleDrop(event, part) {
             const response = await fetch(`/api/scenario/${scenarioId}`);
             const data = await response.json();
 
-            scenarioMode = data.mode || 'trpg';
-            characterName = data.title || (scenarioMode === 'chatbot' ? '캐릭터' : '모험가');
+            // 💡 챗봇 모드 시나리오라면 전용 chat.html 페이지로 즉시 이동
+            if (data.mode === 'chatbot') {
+                window.location.replace(`/chat/${scenarioId}`);
+                return;
+            }
 
+            scenarioMode = 'trpg';
             if (data.title) {
                 document.getElementById('player-name').innerText = data.title;
             }
 
-            if (scenarioMode === 'chatbot') {
-                document.title = `${characterName} - 인물 챗봇`;
-                const bestiaryBtn = document.getElementById('bestiary-btn');
-                if (bestiaryBtn) bestiaryBtn.style.display = 'none';
+            document.title = `${data.title || '모험 중'} - Gemini TRPG`;
+            const bestiaryBtn = document.getElementById('bestiary-btn');
+            if (bestiaryBtn) bestiaryBtn.style.display = 'block';
 
-                const badge = document.getElementById('header-mode-badge');
-                if (badge) {
-                    badge.style.display = 'inline-flex';
-                    badge.style.background = 'rgba(255, 90, 121, 0.18)';
-                    badge.style.color = '#FF5A79';
-                    badge.style.border = '1px solid rgba(255, 90, 121, 0.4)';
-                    badge.innerHTML = '<i class="bi bi-chat-heart-fill"></i> 인물 챗봇';
-                }
-
-                const trpgSection = document.getElementById('trpg-status-section');
-                if (trpgSection) trpgSection.style.display = 'none';
-
-                const botSection = document.getElementById('chatbot-profile-section');
-                if (botSection) botSection.style.display = 'flex';
-
-                const rightPanel = document.getElementById('right-side-panel');
-                if (rightPanel) rightPanel.style.display = 'none';
-
-                document.getElementById('bot-personality').innerText = data.characterInfo || '설정 없음';
-                document.getElementById('bot-relation').innerText = data.worldSetting || '설정 없음';
-                document.getElementById('bot-appearance').innerText = data.appearance || '외형 묘사 없음';
-
-                document.getElementById('chat-header-title').innerHTML = `<i class="bi bi-chat-heart-fill" style="color:#FF5A79;"></i> ${characterName}과의 1:1 대화`;
-                userInput.placeholder = `${characterName}에게 메시지 보내기...`;
-                document.getElementById('img-btn').innerHTML = '<i class="bi bi-image"></i> 장면';
-                document.getElementById('portrait-btn-text').innerText = '프로필 사진 변경';
-            } else {
-                document.title = `${data.title || '모험 중'} - Gemini TRPG`;
-                const bestiaryBtn = document.getElementById('bestiary-btn');
-                if (bestiaryBtn) bestiaryBtn.style.display = 'block';
-
-                const badge = document.getElementById('header-mode-badge');
-                if (badge) {
-                    badge.style.display = 'inline-flex';
-                    badge.style.background = 'var(--surface-2)';
-                    badge.style.color = 'var(--text-primary)';
-                    badge.style.border = '1px solid var(--border-strong)';
-                    badge.innerHTML = '<i class="bi bi-shield-shaded"></i> TRPG 모드';
-                }
-
-                const trpgSection = document.getElementById('trpg-status-section');
-                if (trpgSection) trpgSection.style.display = 'flex';
-
-                const botSection = document.getElementById('chatbot-profile-section');
-                if (botSection) botSection.style.display = 'none';
-
-                const rightPanel = document.getElementById('right-side-panel');
-                if (rightPanel) rightPanel.style.display = 'flex';
-                
-                document.getElementById('chat-header-title').innerText = 'ADVENTURE';
-                userInput.placeholder = '시나리오를 진행하여 주세요.';
-                document.getElementById('img-btn').innerText = '그림';
-                document.getElementById('portrait-btn-text').innerText = '초상화 그리기';
+            const badge = document.getElementById('header-mode-badge');
+            if (badge) {
+                badge.style.display = 'inline-flex';
+                badge.style.background = 'var(--surface-2)';
+                badge.style.color = 'var(--text-primary)';
+                badge.style.border = '1px solid var(--border-strong)';
+                badge.innerHTML = '<i class="bi bi-shield-shaded"></i> TRPG 모드';
             }
+
+            const trpgSection = document.getElementById('trpg-status-section');
+            if (trpgSection) trpgSection.style.display = 'flex';
+
+            const rightPanel = document.getElementById('right-side-panel');
+            if (rightPanel) rightPanel.style.display = 'flex';
+            
+            document.getElementById('chat-header-title').innerText = 'ADVENTURE';
+            userInput.placeholder = '시나리오를 진행하여 주세요. (설득 시도 시 설득 버튼 또는 D20 사용)';
+            document.getElementById('img-btn').innerText = '그림';
+            document.getElementById('portrait-btn-text').innerText = '초상화 그리기';
             
             // 통신 성공 후 data를 처리하는 부분
             currentBestiary = data.bestiary || {}; 
@@ -1123,11 +1106,7 @@ async function handleDrop(event, part) {
             }
             if (data.playerImageUrl) updatePlayerImageUI(data.playerImageUrl);
             
-            if (scenarioMode === 'chatbot') {
-                renderBotMemories();
-            } else {
-                updateAllPanels(); 
-            }
+            updateAllPanels(); 
         } catch (err) {
             console.error("시나리오 정보 로드 실패", err);
         }
@@ -1139,7 +1118,7 @@ function addMessage(sender, text, isImage = false) {
             return; 
         }
 
-        const isBot = (sender === '마스터' || sender === characterName);
+        const isBot = (sender === '마스터');
         const div = document.createElement('div');
         div.className = `msg ${isBot ? 'master' : 'player'}`;
         
@@ -1147,9 +1126,9 @@ function addMessage(sender, text, isImage = false) {
             const imgSrc = text.includes('<img') ? text.match(/src=["']([^"']+)["']/)[1] : text;
             div.innerHTML = `<strong>${sender}</strong>: <br><img src="${imgSrc}" onclick="window.open(this.src)" style="cursor:pointer;">`;
         } else {
-            const hasDice = typeof text === 'string' && text.startsWith('🎲');
-            div.innerText = `${sender}: ${hasDice ? text.replace(/^🎲\s*/, '') : text}`;
-            if (hasDice) { const ic = document.createElement('i'); ic.className = 'bi bi-dice-5'; ic.style.marginRight = '6px'; div.prepend(ic); }
+            const hasDice = typeof text === 'string' && (text.startsWith('🎲') || text.includes('[설득 굴림:'));
+            div.innerText = `${sender}: ${typeof text === 'string' && text.startsWith('🎲') ? text.replace(/^🎲\s*/, '') : text}`;
+            if (hasDice) { const ic = document.createElement('i'); ic.className = 'bi bi-dice-5-fill'; ic.style.marginRight = '6px'; ic.style.color = '#D68B00'; div.prepend(ic); }
         }
         
         chatWindow.appendChild(div);
@@ -1167,59 +1146,58 @@ function addMessage(sender, text, isImage = false) {
             if (history && history.length > 0) {
                 history.forEach((msg) => {
                     const isUser = msg.role === 'user' || msg.role === 'player';
-                    const senderName = isUser ? '나' : (scenarioMode === 'chatbot' ? characterName : '마스터');
+                    const senderName = isUser ? '나' : '마스터';
                     const content = msg.content || "내용이 없는 메시지입니다.";
                     const isImg = content.startsWith('http') || content.startsWith('data:image');
                     addMessage(senderName, content, isImg);
                 });
             } else {
-                if (scenarioMode === 'chatbot') {
-                    send(`(대화를 시작합니다. '${characterName}' 캐릭터 설정에 맞춰 첫인사를 건네주세요.)`);
-                } else {
-                    start(); 
-                }
+                start(); 
             }
         } catch (err) {
             console.error("❌ 대화 기록 표시 중 에러 발생:", err);
         }
     }
 
-    async function send(message = null) {
+    async function send(message = null, customDiceRoll = null) {
         const userText = message !== null ? message : userInput.value.trim();
         if (!userText) return;
 
         if (message === null) {
             addMessage("나", userText);
             userInput.value = "";
+        } else if (!userText.startsWith('[시스템]') && !userText.startsWith('게임을 시작해줘')) {
+            addMessage("나", userText);
         }
 
         showLoading();
 
         try {
+            const payload = { 
+                scenarioId: scenarioId,
+                userMessage: userText, 
+                model: document.getElementById('model-select').value
+            };
+            if (customDiceRoll !== null) {
+                payload.diceRoll = customDiceRoll;
+            }
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    scenarioId: scenarioId,
-                    userMessage: userText, 
-                    model: document.getElementById('model-select').value
-                })
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
                 const data = await response.json(); 
                 hideLoading();
 
-                if (data.diceValue) animateDice(data.diceValue);
-                
-                const botSender = (scenarioMode === 'chatbot' ? characterName : '마스터');
-                addMessage(botSender, data.reply);
-                
-                if (scenarioMode === 'chatbot') {
-                    currentEvents = data.questLines || currentEvents;
-                    renderBotMemories();
-                    return;
+                // 서버에서 자동 판정된 설득 주사위가 있고, 클라이언트가 먼저 안 굴렸다면 애니메이션 실행
+                if (data.diceValue && customDiceRoll === null) {
+                    animateDice(data.diceValue);
                 }
+                
+                addMessage('마스터', data.reply);
                                 
                 // TRPG 모드 정보 최신화
                 currentBestiary = data.bestiary || {}; 
@@ -1261,10 +1239,7 @@ function addMessage(sender, text, isImage = false) {
         const loadingDiv = document.createElement('div');
         loadingDiv.id = 'ai-loading';
         loadingDiv.className = 'loading';
-        const loadingText = (scenarioMode === 'chatbot') 
-            ? `${characterName}이(가) 답변을 작성하는 중` 
-            : `마스터가 주사위를 굴리는 중`;
-        loadingDiv.innerHTML = `<span>${loadingText}</span><div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
+        loadingDiv.innerHTML = `<span>마스터가 주사위를 굴리며 판정 중</span><div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
         chatWindow.appendChild(loadingDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
@@ -1293,13 +1268,10 @@ function addMessage(sender, text, isImage = false) {
     }
 
     async function generateImage() {
-        if (scenarioMode === 'chatbot') {
-            if (!confirm(`'${characterName}'과의 현재 대화 장면 일러스트를 그릴까요?`)) return;
+        if (!currentEvents || currentEvents.length === 0) {
+            if (!confirm("아직 모험 일지에 주요 사건이 기록되지 않았습니다. 현재 장면을 상상해 일러스트를 그릴까요?")) return;
         } else {
-            if (!currentEvents || currentEvents.length === 0) {
-                alert("아직 요약된 주요 사건이 없어 그림을 그릴 수 없습니다!");
-                return;
-            }
+            if (!confirm("현재 모험 상황을 바탕으로 장면 일러스트를 생성할까요?")) return;
         }
         showLoading(); 
         try {

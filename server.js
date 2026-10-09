@@ -122,6 +122,7 @@ app.get('/edit/:id', (req, res) => {
     res.sendFile(path.join(__dirname, 'edit.html')); 
 });
 app.get('/game/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'game.html')) : res.redirect('/auth/google'));
+app.get('/chat/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'chat.html')) : res.redirect('/auth/google'));
 
 // 7. API 라우트
 app.get('/api/user', (req, res) => res.json(req.user || null));
@@ -214,19 +215,23 @@ app.post('/api/chat', async (req, res) => {
         const shouldSummarize = (messageCount + 1) % 5 === 0;
         const isRefreshTurn = (messageCount > 0 && (messageCount % 10 === 0 || messageCount % 10 === 1));
 
-        // 2. 주사위 판정 로직 (TRPG 모드 전용)
+        // 2. 주사위 판정 로직 (TRPG 모드 전용 - 설득 굴림)
         let diceResultText = "";
         let diceRoll = 0;
 
         if (!isChatbotMode) {
-            const actionKeywords = ["공격", "조사", "열기", "설득", "훔치기", "사용", "회피", "방어"];
-            const isAction = userMessage && actionKeywords.some(k => userMessage.includes(k));
-            if (isAction) {
+            const isPersuasion = userMessage && (userMessage.includes("설득") || userMessage.includes("[설득"));
+            if (req.body.diceRoll) {
+                diceRoll = Number(req.body.diceRoll);
+            } else if (isPersuasion) {
                 diceRoll = Math.floor(Math.random() * 20) + 1;
+            }
+
+            if (diceRoll > 0) {
                 let success = diceRoll >= 10 ? "성공" : "실패";
                 if (diceRoll === 20) success = "대성공(크리티컬!)";
                 if (diceRoll === 1) success = "대실패(펌블!)";
-                diceResultText = `\n[판정 시스템: 플레이어 행동 시도. 주사위 결과: ${diceRoll} (${success}). 이 결과를 바탕으로 묘사하세요.]`;
+                diceResultText = `\n[판정 시스템: 플레이어가 설득(Persuasion)을 시도했습니다. D20 주사위 결과: ${diceRoll} (${success}, 난이도 기준치 10). 설득이 ${success}한 결과를 바탕으로 상대방의 반응과 상황 전개를 생생하게 묘사하세요.]`;
             }
         }
 

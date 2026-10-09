@@ -432,7 +432,7 @@
                     const isChatbot = (s.mode === 'chatbot');
                     const card = document.createElement('div');
                     card.className = 'card';
-                    card.onclick = () => location.href = `/game/${s._id}`;
+                    card.onclick = () => location.href = (isChatbot ? `/chat/${s._id}` : `/game/${s._id}`);
                     
                     const badgeHtml = isChatbot 
                         ? `<div class="card-badge chatbot"><i class="bi bi-chat-heart-fill"></i> 인물 챗봇</div>`

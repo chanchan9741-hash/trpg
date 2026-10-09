@@ -183,6 +183,47 @@ app.get('/edit/:id', (req, res) => {
 });
 app.get('/game/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'game.html')) : res.redirect('/auth/google'));
 app.get('/chat/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'chat.html')) : res.redirect('/auth/google'));
+app.get('/gallery', (req, res) => res.sendFile(path.join(__dirname, 'gallery.html')));
+
+// 🖼️ 갤러리 이미지 목록 API
+app.get('/api/gallery', async (req, res) => {
+    try {
+        const imgDir = path.join(__dirname, 'public', 'image');
+        if (!fs.existsSync(imgDir)) return res.json([]);
+        
+        const files = fs.readdirSync(imgDir);
+        const imageFiles = files.filter(f => !f.startsWith('BG') && /\.(png|jpe?g|webp|gif)$/i.test(f));
+        
+        const scenarios = await Scenario.find({}).lean().catch(() => []);
+        const scenarioMap = {};
+        scenarios.forEach(s => {
+            scenarioMap[String(s._id)] = s.title;
+        });
+
+        const list = imageFiles.map(filename => {
+            const stat = fs.statSync(path.join(imgDir, filename));
+            let title = filename;
+            const match = filename.match(/^(portrait|scene)_([^_]+)/);
+            if (match && match[2] && scenarioMap[match[2]]) {
+                const typeText = match[1] === 'portrait' ? '프로필 일러스트' : '대화 장면 삽화';
+                title = `[${scenarioMap[match[2]]}] ${typeText}`;
+            }
+
+            return {
+                filename,
+                url: `/image/${filename}`,
+                title,
+                sizeKb: Math.round(stat.size / 1024),
+                createdAt: stat.mtime
+            };
+        }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json(list);
+    } catch (err) {
+        logError('갤러리 목록 조회 (/api/gallery)', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // 7. API 라우트
 app.get('/api/user', (req, res) => res.json(req.user || null));

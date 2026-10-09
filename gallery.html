@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 생성 일러스트 보관함 - TRPG & Chatbot</title>
+    <link rel="stylesheet" href="/css/theme.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: var(--bg-dark-brown);
+            color: var(--text-primary);
+            font-family: 'Pretendard', sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 32px;
+            background: var(--bg-beige);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-back-btn {
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .nav-back-btn:hover {
+            border-color: var(--brand);
+            color: var(--brand);
+        }
+
+        .header-title {
+            font-size: 1.3rem;
+            font-weight: 800;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .count-badge {
+            background: var(--brand-soft);
+            color: var(--brand);
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+            flex: 1;
+            width: 100%;
+        }
+
+        .gallery-desc {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .folder-hint {
+            background: var(--surface-2);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .image-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .image-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            border-color: var(--brand);
+        }
+
+        .image-thumb-wrap {
+            position: relative;
+            width: 100%;
+            padding-top: 100%; /* 1:1 Aspect Ratio */
+            background: #111;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .image-thumb-wrap img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+        .image-card:hover .image-thumb-wrap img {
+            transform: scale(1.04);
+        }
+
+        .type-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            backdrop-filter: blur(4px);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .type-badge.portrait {
+            background: rgba(255, 90, 121, 0.85);
+        }
+        .type-badge.scene {
+            background: rgba(0, 181, 139, 0.85);
+        }
+
+        .card-body {
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .card-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            word-break: break-all;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .card-meta {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .btn-view, .btn-download {
+            flex: 1;
+            padding: 8px 0;
+            border-radius: 8px;
+            border: 1px solid var(--border-strong);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-view {
+            background: var(--surface-2);
+            color: var(--text-primary);
+        }
+        .btn-view:hover {
+            background: var(--brand-soft);
+            color: var(--brand);
+            border-color: var(--brand);
+        }
+        .btn-download {
+            background: var(--brand);
+            color: white;
+            border-color: var(--brand);
+        }
+        .btn-download:hover {
+            opacity: 0.9;
+        }
+
+        /* 라이트박스 모달 */
+        #lightbox-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #lightbox-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            object-fit: contain;
+        }
+        #lightbox-close {
+            position: absolute;
+            top: 24px;
+            right: 28px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        #lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+        .empty-state i {
+            font-size: 3.5rem;
+            margin-bottom: 16px;
+            display: block;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <a href="/" class="nav-back-btn"><i class="bi bi-arrow-left"></i> 대시보드로 이동</a>
+            <h1 class="header-title">
+                <i class="bi bi-images" style="color: var(--brand);"></i> AI 일러스트 보관함
+                <span class="count-badge" id="image-count">0개</span>
+            </h1>
+        </div>
+        <div>
+            <button class="nav-back-btn" onclick="loadGallery()"><i class="bi bi-arrow-clockwise"></i> 새로고침</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="gallery-desc">
+            <span>생성된 모든 캐릭터 프로필 및 장면 삽화가 이곳에 영구 보관됩니다. 이미지를 클릭하면 원본 크기로 볼 수 있습니다.</span>
+            <span class="folder-hint"><i class="bi bi-folder2-open"></i> 로컬 저장 경로: <code>public/image/</code></span>
+        </div>
+
+        <div class="gallery-grid" id="gallery-grid">
+            <!-- 자바스크립트로 이미지 카드 렌더링 -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <i class="bi bi-image"></i>
+            <h3>아직 생성된 이미지가 없습니다.</h3>
+            <p>챗봇 모드나 TRPG 게임에서 '프로필 일러스트' 또는 '장면 삽화'를 생성해 보세요!</p>
+        </div>
+    </div>
+
+    <!-- 라이트박스 원본 모달 -->
+    <div id="lightbox-modal" onclick="closeLightbox()">
+        <button id="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <img id="lightbox-content" src="" alt="확대 이미지" onclick="event.stopPropagation()">
+    </div>
+
+    <script src="/js/theme.js"></script>
+    <script>
+        async function loadGallery() {
+            try {
+                const res = await fetch('/api/gallery');
+                if (!res.ok) throw new Error("이미지 목록을 불러오지 못했습니다.");
+                const images = await res.json();
+
+                const grid = document.getElementById('gallery-grid');
+                const empty = document.getElementById('empty-state');
+                const countBadge = document.getElementById('image-count');
+
+                countBadge.innerText = `${images.length}개`;
+
+                if (!images || images.length === 0) {
+                    grid.innerHTML = '';
+                    empty.style.display = 'block';
+                    return;
+                }
+
+                empty.style.display = 'none';
+                grid.innerHTML = images.map(img => {
+                    const isPortrait = img.filename.startsWith('portrait');
+                    const isScene = img.filename.startsWith('scene');
+                    let badgeClass = isPortrait ? 'portrait' : (isScene ? 'scene' : '');
+                    let badgeLabel = isPortrait ? '👤 프로필 초상화' : (isScene ? '🎬 장면 삽화' : '🖼️ 이미지');
+
+                    const dateStr = img.createdAt ? new Date(img.createdAt).toLocaleString('ko-KR') : '시간 정보 없음';
+                    const sizeStr = img.sizeKb ? `${img.sizeKb} KB` : '';
+
+                    return `
+                        <div class="image-card">
+                            <div class="image-thumb-wrap" onclick="openLightbox('${img.url}')">
+                                <img src="${img.url}" alt="${img.filename}" loading="lazy">
+                                <span class="type-badge ${badgeClass}">${badgeLabel}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-title">${img.title || img.filename}</div>
+                                <div class="card-meta">
+                                    <span><i class="bi bi-clock"></i> ${dateStr}</span>
+                                    <span>${sizeStr}</span>
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn-view" onclick="openLightbox('${img.url}')">
+                                        <i class="bi bi-zoom-in"></i> 확대 보기
+                                    </button>
+                                    <a class="btn-download" href="${img.url}" download="${img.filename}" target="_blank">
+                                        <i class="bi bi-download"></i> 다운로드
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("갤러리 로드 실패:", err);
+            }
+        }
+
+        function openLightbox(url) {
+            const modal = document.getElementById('lightbox-modal');
+            const img = document.getElementById('lightbox-content');
+            img.src = url;
+            modal.style.display = 'flex';
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').style.display = 'none';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+
+        loadGallery();
+    </script>
+</body>
+</html>

@@ -20,7 +20,7 @@ const openai = new OpenAI({
 });
 
 // 2. Firebase Firestore 데이터베이스 및 모델 연동
-const { User, Scenario, Message, saveCloudImage, getCloudImage } = require('./db');
+const { User, Scenario, Message, saveCloudImage, getCloudImage, deleteCloudScenarioImages } = require('./db');
 
 // 🚨 터미널 에러 로깅 헬퍼 함수
 function logError(context, error, extra = null) {
@@ -995,8 +995,9 @@ app.delete('/api/scenarios/:id', async (req, res) => {
 
         // 2. 연결된 메시지들도 삭제 (서브컬렉션 및 레거시 메시지 일괄 정리)
         await Message.deleteMany({ scenarioId: scenarioId });
+        await deleteCloudScenarioImages(scenarioId);
 
-        // 3. 해당 시나리오 전용 이미지 디렉터리 정리
+        // 3. 해당 시나리오 전용 로컬 이미지 디렉터리 정리
         try {
             const scenarioImgDir = path.join(__dirname, 'public', 'image', scenarioId);
             if (fs.existsSync(scenarioImgDir)) {

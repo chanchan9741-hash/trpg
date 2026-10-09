@@ -567,7 +567,10 @@ async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
         const CHUNK_SIZE = 700 * 1024;
         const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
 
-        const metaRef = firestore.collection('cloud_images').doc(imageId);
+        const metaRef = targetScenarioId
+            ? firestore.collection('scenarios').doc(targetScenarioId).collection('images').doc(imageId)
+            : firestore.collection('cloud_images').doc(imageId);
+
         const batch = firestore.batch();
         batch.set(metaRef, {
             scenarioId: targetScenarioId || null,
@@ -607,26 +610,60 @@ async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
 async function getCloudImage(filenameOrId) {
     const firestore = checkDb();
     try {
-        const cleanName = filenameOrId.includes('/') ? filenameOrId.split('/').pop() : filenameOrId;
-        const parts = cleanName.split('.');
-        const imageId = parts.length > 1 ? parts.slice(0, -1).join('.') : cleanName;
+        let scenarioId = null;
+        let cleanName = filenameOrId;
 
-        let metaDoc = await firestore.collection('cloud_images').doc(imageId).get();
-        if (!metaDoc.exists && filenameOrId.includes('/')) {
-            const altId = filenameOrId.replace('/', '_').split('.')[0];
-            metaDoc = await firestore.collection('cloud_images').doc(altId).get();
-        }
-        if (!metaDoc.exists) {
-            metaDoc = await firestore.collection('cloud_images').doc(cleanName).get();
-            if (!metaDoc.exists) {
-                const qSnap = await firestore.collection('cloud_images').where('filename', '==', cleanName).limit(1).get();
-                if (!qSnap.empty) {
-                    metaDoc = qSnap.docs[0];
-                } else {
-                    return null;
-                }
+        if (filenameOrId.includes('/')) {
+            const parts = filenameOrId.split('/');
+            if (parts.length >= 2) {
+                scenarioId = parts[0];
+                cleanName = parts[parts.length - 1];
             }
         }
+
+        const nameParts = cleanName.split('.');
+        const imageId = nameParts.length > 1 ? nameParts.slice(0, -1).join('.') : cleanName;
+
+        if (!scenarioId) {
+            const m = cleanName.match(/^(?:nsfw_)?(?:scene|portrait|chat)_([^_]+)/);
+            if (m) scenarioId = m[1];
+        }
+
+        let metaDoc = null;
+
+        // 1) 시나리오가 특정된 경우: scenarios/{scenarioId}/images/{imageId}
+        if (scenarioId) {
+            const directDoc = await firestore.collection('scenarios').doc(scenarioId).collection('images').doc(imageId).get();
+            if (directDoc.exists) {
+                metaDoc = directDoc;
+            } else {
+                const qSnap = await firestore.collection('scenarios').doc(scenarioId).collection('images').where('filename', '==', cleanName).limit(1).get();
+                if (!qSnap.empty) metaDoc = qSnap.docs[0];
+            }
+        }
+
+        // 2) 못 찾았으면 collectionGroup('images')로 전체 검색
+        if (!metaDoc) {
+            try {
+                const qGroup = await firestore.collectionGroup('images').where('filename', '==', cleanName).limit(1).get();
+                if (!qGroup.empty) metaDoc = qGroup.docs[0];
+            } catch (_) {}
+        }
+
+        // 3) 레거시 root cloud_images 컬렉션 fallback
+        if (!metaDoc) {
+            let legacyDoc = await firestore.collection('cloud_images').doc(imageId).get();
+            if (!legacyDoc.exists) {
+                legacyDoc = await firestore.collection('cloud_images').doc(cleanName).get();
+            }
+            if (!legacyDoc.exists) {
+                const qSnap = await firestore.collection('cloud_images').where('filename', '==', cleanName).limit(1).get();
+                if (!qSnap.empty) legacyDoc = qSnap.docs[0];
+            }
+            if (legacyDoc && legacyDoc.exists) metaDoc = legacyDoc;
+        }
+
+        if (!metaDoc || !metaDoc.exists) return null;
 
         const meta = metaDoc.data();
         const chunksSnap = await metaDoc.ref.collection('chunks').get();
@@ -638,13 +675,28 @@ async function getCloudImage(filenameOrId) {
         return {
             buffer: fullBuffer,
             contentType: meta.contentType || 'image/png',
-            scenarioId: meta.scenarioId || null,
+            scenarioId: meta.scenarioId || scenarioId || null,
             filename: meta.filename || cleanName
         };
     } catch (err) {
         console.error("❌ 클라우드 이미지 읽기 에러:", err.message);
         return null;
     }
+}
+
+async function deleteCloudScenarioImages(scenarioId) {
+    if (!scenarioId) return;
+    const firestore = checkDb();
+    try {
+        const imgSnap = await firestore.collection('scenarios').doc(scenarioId).collection('images').get();
+        for (const doc of imgSnap.docs) {
+            const chunksSnap = await doc.ref.collection('chunks').get();
+            for (const chunk of chunksSnap.docs) {
+                await chunk.ref.delete();
+            }
+            await doc.ref.delete();
+        }
+    } catch (_) {}
 }
 
 module.exports = {
@@ -654,5 +706,6 @@ module.exports = {
     Scenario: ScenarioModel,
     Message,
     saveCloudImage,
-    getCloudImage
+    getCloudImage,
+    deleteCloudScenarioImages
 };

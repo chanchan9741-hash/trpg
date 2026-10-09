@@ -192,7 +192,8 @@ app.get('/api/gallery', async (req, res) => {
         if (!fs.existsSync(imgDir)) return res.json([]);
         
         const files = fs.readdirSync(imgDir);
-        const imageFiles = files.filter(f => !f.startsWith('BG') && /\.(png|jpe?g|webp|gif)$/i.test(f));
+        // 🔞 성인 일러스트(nsfw_ 접두사)는 공개 갤러리에서 제외
+        const imageFiles = files.filter(f => !f.startsWith('BG') && !f.startsWith('nsfw_') && /\.(png|jpe?g|webp|gif)$/i.test(f));
         
         const scenarios = await Scenario.find({}).catch(() => []);
         const scenarioMap = {};
@@ -290,6 +291,7 @@ app.post('/api/scenarios', async (req, res) => {
         const newScenario = new Scenario({
             userId: req.user._id,
             mode: req.body.mode || 'trpg', // 'trpg' | 'chatbot'
+            adultMode: req.body.adultMode === true,
             title: req.body.title,
             worldSetting: req.body.worldSetting,
             characterInfo: req.body.characterInfo,
@@ -874,10 +876,11 @@ app.put('/api/scenarios/:id', async (req, res) => {
         if (!req.user) return res.status(401).send("Unauthorized");
 
         // 프론트엔드에서 보낸 수정 데이터를 받습니다.
-        const { title, worldSetting, characterInfo, appearance, artStyle, mode } = req.body;
+        const { title, worldSetting, characterInfo, appearance, artStyle, mode, adultMode } = req.body;
         
         const updateData = { title, worldSetting, characterInfo, appearance, artStyle };
         if (mode) updateData.mode = mode;
+        if (typeof adultMode === 'boolean') updateData.adultMode = adultMode;
 
         // 데이터베이스에서 해당 ID를 찾아서 덮어씌웁니다. (본인 시나리오만 수정 가능)
         const updatedScenario = await Scenario.findOneAndUpdate(
@@ -1133,6 +1136,163 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
     return { response, responseText };
 }
 
+// =====================================================================
+// 🔞 AI Horde 성인 일러스트 엔진 (무료 크라우드소싱 Stable Diffusion 네트워크)
+// - 시나리오의 adultMode가 켜져 있을 때만 사용
+// - AI_HORDE_API_KEY(무료 가입 키)가 없으면 익명 키(대기열 최하위)로 동작
+// - 미성년자 연상 설정은 무조건 차단 (원문 + 변환된 태그 이중 검사)
+// =====================================================================
+const HORDE_API = 'https://aihorde.net/api/v2';
+const HORDE_MODELS = (process.env.AI_HORDE_MODELS || 'WAI-NSFW-illustrious-SDXL,Nova Anime XL')
+    .split(',').map(s => s.trim()).filter(Boolean);
+const HORDE_TIMEOUT_MS = Number(process.env.AI_HORDE_TIMEOUT_MS) || 6 * 60 * 1000;
+const HORDE_CLIENT_AGENT = 'trpg-chatbot:1.0:github.com/chanchan9741-hash/trpg';
+
+const MINOR_PATTERNS = [
+    /미성년/, /초등/, /중학/, /고등학/, /초딩|중딩|고딩/, /여고생|남고생|여중생|남중생/, /교복/,
+    /어린이|어린\s*아이|꼬마|아동|유아|유치원/, /로리|쇼타/,
+    /\bchild(ren)?\b/i, /\bkids?\b/i, /\bloli/i, /\bshota/i, /\bminors?\b/i, /underage/i,
+    /\bschool\s*(girl|boy|uniform)/i, /elementary|middle\s*school|high\s*school/i,
+    /\btoddler|\binfant|\bteens?\b|\bteenager/i
+];
+
+// 미성년자를 연상시키는 표현이 있으면 해당 단어를, 없으면 null을 반환
+function detectMinorContent(text) {
+    if (!text) return null;
+    for (const re of MINOR_PATTERNS) {
+        const m = text.match(re);
+        if (m) return m[0];
+    }
+    const ageRe = /(\d{1,2})\s*(살|세|years?\s*old)/gi;
+    let m;
+    while ((m = ageRe.exec(text))) {
+        if (Number(m[1]) < 20) return m[0];
+    }
+    return null;
+}
+
+function minorBlockedError(hit) {
+    const err = new Error(`성인 모드에서는 미성년자를 연상시키는 설정("${hit}")이 포함된 이미지를 생성할 수 없습니다. 캐릭터 설정을 성인으로 수정해 주세요.`);
+    err.code = 'MINOR_BLOCKED';
+    return err;
+}
+
+// 🏷️ 한국어 설정 → 애니 SDXL(Illustrious)용 영어 Danbooru 태그 변환 (gpt-5.4-mini, 텍스트 토큰만 소모)
+async function buildHordeTagsWithAi(koreanPrompt, context = 'scene') {
+    const client = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+        baseURL: "https://factchat-cloud.mindlogic.ai/v1/gateway"
+    });
+    const composition = context === 'portrait'
+        ? 'upper body portrait, looking at viewer'
+        : 'scene illustration that reflects the described situation';
+
+    const res = await client.chat.completions.create({
+        model: "gpt-5.4-mini",
+        messages: [
+            {
+                role: "system",
+                content: `You convert Korean character and scene descriptions into Danbooru-style English tags for an anime SDXL model.
+Rules:
+- Output ONLY comma-separated English tags. No sentences, no explanations, no Korean.
+- Faithfully keep hair, eyes, body type, outfit, expression, pose, setting, mood and the described situation.
+- Do not include the character's name.
+- Every character is an adult: always include "adult" and "mature female" or "mature male" as appropriate.
+- Never output tags that imply minors (child, loli, shota, school uniform, teen, etc.).
+- If the description says or implies the character is a minor, output exactly: REFUSE_MINOR
+- Composition: ${composition}.`
+            },
+            { role: "user", content: koreanPrompt }
+        ],
+        max_tokens: 300,
+        temperature: 0.4
+    });
+
+    const text = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
+    return text ? text.replace(/[\r\n]+/g, ' ').trim() : "";
+}
+
+async function requestHordeImage(koreanPrompt, context = 'scene') {
+    // 1) 원문 미성년자 검사
+    const rawHit = detectMinorContent(koreanPrompt);
+    if (rawHit) throw minorBlockedError(rawHit);
+
+    // 2) 영어 태그 변환 + 변환 결과 재검사
+    const tags = await buildHordeTagsWithAi(cleanPromptFormat(koreanPrompt), context);
+    if (!tags) throw new Error("영어 태그 변환 결과가 비어 있습니다.");
+    if (/REFUSE_MINOR/.test(tags)) throw minorBlockedError("미성년자 설정");
+    if (/[가-힣]/.test(tags) || /\b(sorry|can't|cannot|unable)\b/i.test(tags)) {
+        throw new Error("태그 변환 모델이 요청을 거절했습니다: " + tags.slice(0, 120));
+    }
+    const tagHit = detectMinorContent(tags);
+    if (tagHit) throw minorBlockedError(tagHit);
+
+    const positive = `masterpiece, best quality, amazing quality, very aesthetic, absurdres, ${tags}`;
+    const negative = 'lowres, worst quality, low quality, bad anatomy, bad hands, extra fingers, blurry, jpeg artifacts, watermark, signature, text, child, loli, shota, underage, kid, toddler';
+    const [width, height] = context === 'portrait' ? [832, 1216] : [1216, 832];
+    const apiKey = process.env.AI_HORDE_API_KEY || '0000000000';
+
+    console.log(`🔞 [AI Horde 성인 일러스트 요청] 모델: ${HORDE_MODELS.join(' / ')} | 키: ${process.env.AI_HORDE_API_KEY ? '가입 키' : '익명'}\n🏷️ 태그: ${tags}`);
+
+    // 3) 비동기 생성 요청
+    const submitRes = await fetch(`${HORDE_API}/generate/async`, {
+        method: 'POST',
+        headers: { 'apikey': apiKey, 'Content-Type': 'application/json', 'Client-Agent': HORDE_CLIENT_AGENT },
+        body: JSON.stringify({
+            prompt: `${positive} ### ${negative}`,
+            params: { width, height, steps: 28, cfg_scale: 6, sampler_name: 'k_euler_a', karras: true, clip_skip: 2, n: 1 },
+            nsfw: true,
+            censor_nsfw: false,
+            r2: true,
+            models: HORDE_MODELS
+        })
+    });
+    const submitText = await submitRes.text();
+    if (!submitRes.ok) throw new Error(`AI Horde 요청 실패 (HTTP ${submitRes.status}): ${submitText.slice(0, 200)}`);
+    const { id } = JSON.parse(submitText);
+    if (!id) throw new Error("AI Horde 작업 ID를 받지 못했습니다: " + submitText.slice(0, 200));
+
+    // 4) 완료될 때까지 폴링
+    const startedAt = Date.now();
+    let polls = 0;
+    while (true) {
+        if (Date.now() - startedAt > HORDE_TIMEOUT_MS) {
+            fetch(`${HORDE_API}/generate/status/${id}`, { method: 'DELETE', headers: { 'Client-Agent': HORDE_CLIENT_AGENT } }).catch(() => {});
+            throw new Error(`AI Horde 대기 시간 초과 (${Math.round(HORDE_TIMEOUT_MS / 1000)}초)`);
+        }
+        await new Promise(r => setTimeout(r, 4000));
+        const checkRes = await fetch(`${HORDE_API}/generate/check/${id}`, { headers: { 'Client-Agent': HORDE_CLIENT_AGENT } });
+        if (!checkRes.ok) continue;
+        const check = await checkRes.json();
+        if (check.faulted) throw new Error("AI Horde 작업이 실패했습니다 (faulted).");
+        if (check.is_possible === false) throw new Error("현재 선택한 모델을 처리할 수 있는 Horde 워커가 없습니다.");
+        if (check.done) break;
+        if (polls++ % 5 === 0) {
+            console.log(`⏳ [AI Horde] 대기열 ${check.queue_position}번째, 예상 ${check.wait_time}초 (경과 ${Math.round((Date.now() - startedAt) / 1000)}초)`);
+        }
+    }
+
+    // 5) 결과 다운로드
+    const statusRes = await fetch(`${HORDE_API}/generate/status/${id}`, { headers: { 'Client-Agent': HORDE_CLIENT_AGENT } });
+    const status = await statusRes.json();
+    const gen = status.generations && status.generations[0];
+    if (!gen || !gen.img) throw new Error("AI Horde 결과 이미지가 없습니다.");
+    if (gen.censored) throw new Error("AI Horde가 이미지를 검열 처리했습니다.");
+
+    let dataUrl = gen.img;
+    if (gen.img.startsWith('http')) {
+        const imgRes = await fetch(gen.img);
+        if (!imgRes.ok) throw new Error(`AI Horde 이미지 다운로드 실패 (HTTP ${imgRes.status})`);
+        const buf = Buffer.from(await imgRes.arrayBuffer());
+        dataUrl = `data:image/webp;base64,${buf.toString('base64')}`;
+    } else if (!gen.img.startsWith('data:image')) {
+        dataUrl = `data:image/webp;base64,${gen.img}`;
+    }
+
+    console.log(`✨ [AI Horde 생성 완료] 모델: ${gen.model}, 워커: ${gen.worker_name}, 소요: ${Math.round((Date.now() - startedAt) / 1000)}초`);
+    return { dataUrl, model: gen.model, tags };
+}
+
 app.post('/api/generate-image', async (req, res) => {
     try {
         const { scenarioId } = req.body;
@@ -1171,6 +1331,19 @@ app.post('/api/generate-image', async (req, res) => {
         배경 세계관: ${scenario.worldSetting || '판타지 세계'}.
         현재 모험 상황: ${recentEvents}.
         ${currentEquipString}.`;
+        }
+
+        // 🔞 성인 일러스트 모드: AI Horde로 생성 (실패 시 아래 FactChat 일반 경로로 대체)
+        if (scenario.adultMode) {
+            try {
+                const horde = await requestHordeImage(richPrompt, 'scene');
+                const savedUrl = await saveBase64Image(horde.dataUrl, `nsfw_scene_${scenarioId}`);
+                console.log("✅ [성인 모드] 장면 삽화 저장 완료! 경로:", savedUrl);
+                return res.json({ imageUrl: savedUrl, engine: 'ai-horde' });
+            } catch (hordeErr) {
+                if (hordeErr.code === 'MINOR_BLOCKED') return res.status(400).json({ error: hordeErr.message });
+                logError('AI Horde 장면 삽화 실패 → FactChat 일반 모드로 대체', hordeErr, { scenarioId });
+            }
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'scene');
@@ -1258,6 +1431,21 @@ app.post('/api/generate-player-image', async (req, res) => {
             그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
             캐릭터 외형: ${scenario.appearance || '기본 외형'}
             ${currentEquipString}.`;
+        }
+
+        // 🔞 성인 일러스트 모드: AI Horde로 프로필 생성 (실패 시 아래 FactChat 일반 경로로 대체)
+        if (scenario.adultMode) {
+            try {
+                const horde = await requestHordeImage(imagePrompt, 'portrait');
+                const savedUrl = await saveBase64Image(horde.dataUrl, `nsfw_portrait_${scenarioId}`);
+                scenario.playerImageUrl = savedUrl;
+                await scenario.save();
+                console.log("✅ [성인 모드] 프로필 일러스트 저장 완료! 경로:", savedUrl);
+                return res.json({ playerImageUrl: savedUrl, engine: 'ai-horde' });
+            } catch (hordeErr) {
+                if (hordeErr.code === 'MINOR_BLOCKED') return res.status(400).json({ error: hordeErr.message });
+                logError('AI Horde 프로필 생성 실패 → FactChat 일반 모드로 대체', hordeErr, { scenarioId });
+            }
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'portrait');

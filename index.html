@@ -435,9 +435,10 @@
                     card.className = 'card';
                     card.onclick = () => location.href = (isChatbot ? `/chat/${s._id}` : `/game/${s._id}`);
                     
+                    const adultBadge = s.adultMode ? `<span style="margin-left: 6px; padding: 2px 7px; border-radius: 12px; background: rgba(255, 60, 100, 0.15); color: #ff477e; font-size: 0.72rem; font-weight: bold; border: 1px solid rgba(255, 60, 100, 0.35); vertical-align: middle;">🔞 성인</span>` : '';
                     const badgeHtml = isChatbot 
-                        ? `<div class="card-badge chatbot"><i class="bi bi-chat-heart-fill"></i> 인물 챗봇</div>`
-                        : `<div class="card-badge trpg"><i class="bi bi-shield-shaded"></i> TRPG 모드</div>`;
+                        ? `<div class="card-badge chatbot"><i class="bi bi-chat-heart-fill"></i> 인물 챗봇${adultBadge}</div>`
+                        : `<div class="card-badge trpg"><i class="bi bi-shield-shaded"></i> TRPG 모드${adultBadge}</div>`;
 
                     const actionText = isChatbot ? '대화하기' : '입장하기';
                     const descText = s.worldSetting || s.characterInfo || '설명이 없습니다.';

@@ -1217,8 +1217,20 @@ app.use((err, req, res, next) => {
 
 // 9. 서버 실행
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log("-----------------------------------------");
     console.log(`서버 실행 중: http://0.0.0.0:${PORT}`);
     console.log("-----------------------------------------");
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error("\n" + "!".repeat(65));
+        console.error(`🚨 [포트 충돌 오류] 포트 ${PORT}번이 이미 다른 프로세스에 의해 사용 중입니다!`);
+        console.error(`👉 기존에 켜져 있는 서버 터미널이나 백그라운드 node.exe를 종료한 후 다시 실행해 주세요.`);
+        console.error("!".repeat(65) + "\n");
+        process.exit(1);
+    } else {
+        logError('HTTP 서버 소켓 오류', err);
+    }
 });

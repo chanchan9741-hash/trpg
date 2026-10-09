@@ -1071,63 +1071,15 @@ async function rewritePromptSafelyWithAi(originalPrompt, isChatbotMode = true) {
     }
 }
 
-// 🌸 Pollinations.ai 검열 없는 무료 이미지 생성 헬퍼 함수 (크레딧/토큰 소모 0원)
-async function requestPollinationsImage(prompt) {
-    const cleanPrompt = prompt.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-    console.log(`🌸 [2차 시도: Pollinations 무료 생성 요청]: ${cleanPrompt.slice(0, 80)}...`);
-    
-    // 모델 우선순위: sana (공식 지원 무료 모델) ➡️ flux-anime (대체 모델)
-    for (const model of ['sana', 'flux-anime']) {
-        try {
-            const seed = Math.floor(Math.random() * 10000000);
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 25000); // 25초 타임아웃
-            
-            const res = await fetch('https://image.pollinations.ai/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                body: JSON.stringify({
-                    prompt: cleanPrompt,
-                    model: model,
-                    width: 1024,
-                    height: 1024,
-                    nologo: true,
-                    seed: seed
-                }),
-                signal: controller.signal
-            });
-            clearTimeout(timeout);
-
-            if (res.ok && res.headers.get('content-type')?.includes('image')) {
-                const arrayBuffer = await res.arrayBuffer();
-                const buffer = Buffer.from(arrayBuffer);
-                if (buffer.length > 3000) {
-                    console.log(`✨ [2차 Pollinations (${model}) 성공!] 크기: ${Math.round(buffer.length / 1024)}KB`);
-                    return `data:image/jpeg;base64,${buffer.toString('base64')}`;
-                }
-            } else {
-                console.warn(`🌸 [Pollinations (${model}) 응답 상태]: ${res.status}`);
-            }
-        } catch (err) {
-            console.warn(`🌸 [Pollinations (${model}) 요청 에러]: ${err.message}`);
-        }
-    }
-    return null;
-}
-
 // 🎨 다단계 지능형 이미지 생성 엔진
-// 1차: 순천향대 FactChat (플래그십 화질)
-// 2차: 검열 없는 무료 Pollinations API (크레딧/토큰 소모 0원 & 원본 프롬프트 보존)
-// 3차: Pollinations 실패 시 그때 비로소 AI(gpt-5.4-mini)로 프롬프트 안전 완화 후 FactChat 재시도
+// 1차: 사용자 원본 프롬프트로 FactChat 플래그십 전송 (검열 통과 시 즉시 완료)
+// 2차: 검열(400 content_policy_violation) 발생 시 (이때 FactChat 크레딧 차감 0원!)
+//      -> gpt-5.4-mini가 캐릭터 고유 특성(이름, 외형, 의상, 성격)을 100% 보존하며 안전 정제 후 FactChat 재전송!
 async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatbotMode = true) {
     const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
-    // 💡 1차와 2차는 자체 검열 없이 사용자 원본 프롬프트 그대로 전송!
     const rawPrompt = cleanPromptFormat(prompt);
     
-    console.log(`🎨 [1차 FactChat 원본 생성 전송]:\n${rawPrompt}`);
+    console.log(`🎨 [1차 FactChat 원본 생성 시도]:\n${rawPrompt}`);
 
     let response = await fetch(SCH_GATEWAY_URL, {
         method: 'POST',
@@ -1150,30 +1102,16 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
         return { response, responseText };
     }
 
-    // 🚨 1차 FactChat에서 안전 정책(content_policy_violation) 감지된 경우!
+    // 🚨 1차 FactChat에서 안전 정책(content_policy_violation) 감지된 경우! (이때 FactChat 크레딧은 0원 차감)
     if (responseText.includes("content_policy_violation") || response.status === 400) {
-        console.warn("⚠️ [1차 FactChat 검열 감지!] 2차: 검열 없는 무료 Pollinations API로 원래 프롬프트 시도 중 (크레딧 0 소모)...");
+        console.warn("⚠️ [1차 FactChat 검열 감지 (크레딧 미차감)] AI(gpt-5.4-mini)로 캐릭터 특성을 보존하여 안전하게 프롬프트 재작성 중...");
         
-        // 🌸 2차 시도: Pollinations (검열 없는 무료 API, 사용자 원본 프롬프트 그대로 시도!)
-        const pollinationsBase64 = await requestPollinationsImage(rawPrompt);
-        if (pollinationsBase64) {
-            console.log("✨ [2차 Pollinations 생성 성공!] 크레딧 소모 없이 원본 의도대로 이미지가 생성되었습니다.");
-            return {
-                response: { ok: true, status: 200 },
-                responseText: JSON.stringify({
-                    data: [{ b64_json: pollinationsBase64 }]
-                })
-            };
-        }
-
-        // 🤖 3차 시도: Pollinations도 실패 시, 그때 비로소 AI(gpt-5.4-mini)를 써서 프롬프트 완화 후 FactChat 재시도!
-        console.warn("⚠️ [2차 Pollinations 실패] 3차: AI(gpt-5.4-mini)로 프롬프트를 안전하게 완화하여 FactChat에 재전송합니다...");
-        let fallback = await rewritePromptSafelyWithAi(rawPrompt, isChatbotMode);
-        if (fallback) {
-            console.log(`🤖 [3차 AI 지능형 안전 재작성 프롬프트]:\n${fallback}`);
+        let safePrompt = await rewritePromptSafelyWithAi(rawPrompt, isChatbotMode);
+        if (safePrompt) {
+            console.log(`🤖 [2차 AI 지능형 안전 재작성 프롬프트]:\n${safePrompt}`);
         } else {
-            fallback = fallbackPrompt ? cleanPromptFormat(fallbackPrompt) : sanitizeImagePrompt(rawPrompt);
-            console.log(`🎨 [3차 기본 안전 템플릿 프롬프트]:\n${fallback}`);
+            safePrompt = fallbackPrompt ? cleanPromptFormat(fallbackPrompt) : sanitizeImagePrompt(rawPrompt);
+            console.log(`🎨 [2차 기본 안전 템플릿 프롬프트]:\n${safePrompt}`);
         }
         
         response = await fetch(SCH_GATEWAY_URL, {
@@ -1184,7 +1122,7 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
             },
             body: JSON.stringify({
                 "model": "gpt-image-2.5-sunburst",
-                "prompt": fallback,
+                "prompt": safePrompt,
                 "size": "1024x1024",
                 "response_format": "url"
             })

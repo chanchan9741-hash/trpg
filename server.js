@@ -954,7 +954,17 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
     }
 });
 
-// 🎨 이미지 생성 프롬프트 안전 필터 정제 함수 (검열 정책 content_policy_violation 방지 및 시각 의도 보존)
+// 🧹 프롬프트 기본 포맷 정리 함수 ((없음) 태그 및 불필요한 공백만 제거, 사용자 표현 원본 100% 유지)
+function cleanPromptFormat(text) {
+    if (!text) return "";
+    return text
+        .replace(/(투구|갑옷|상의|하의|악세사리|장신구|무기|장비)\s*\(\s*없음\s*\)/gi, "")
+        .replace(/\(없음\)/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+// 🎨 3차 최후의 수단용 이미지 안전 필터 정제 함수 (AI 완화 실패 시 백업 템플릿용)
 function sanitizeImagePrompt(text) {
     if (!text) return "";
     return text
@@ -1102,9 +1112,10 @@ async function requestPollinationsImage(prompt) {
 // 3차: Pollinations 실패 시 그때 비로소 AI(gpt-5.4-mini)로 프롬프트 안전 완화 후 FactChat 재시도
 async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatbotMode = true) {
     const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
-    const sanitized = sanitizeImagePrompt(prompt);
+    // 💡 1차와 2차는 자체 검열 없이 사용자 원본 프롬프트 그대로 전송!
+    const rawPrompt = cleanPromptFormat(prompt);
     
-    console.log(`🎨 [1차 FactChat 생성 전송]:\n${sanitized}`);
+    console.log(`🎨 [1차 FactChat 원본 생성 전송]:\n${rawPrompt}`);
 
     let response = await fetch(SCH_GATEWAY_URL, {
         method: 'POST',
@@ -1114,7 +1125,7 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
         },
         body: JSON.stringify({
             "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
-            "prompt": sanitized,
+            "prompt": rawPrompt,
             "size": "1024x1024",
             "response_format": "url"
         })
@@ -1131,8 +1142,8 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
     if (responseText.includes("content_policy_violation") || response.status === 400) {
         console.warn("⚠️ [1차 FactChat 검열 감지!] 2차: 검열 없는 무료 Pollinations API로 원래 프롬프트 시도 중 (크레딧 0 소모)...");
         
-        // 🌸 2차 시도: Pollinations (검열 없는 무료 API, 원본 프롬프트 그대로 시도!)
-        const pollinationsBase64 = await requestPollinationsImage(prompt);
+        // 🌸 2차 시도: Pollinations (검열 없는 무료 API, 사용자 원본 프롬프트 그대로 시도!)
+        const pollinationsBase64 = await requestPollinationsImage(rawPrompt);
         if (pollinationsBase64) {
             console.log("✨ [2차 Pollinations 생성 성공!] 크레딧 소모 없이 원본 의도대로 이미지가 생성되었습니다.");
             return {
@@ -1145,11 +1156,11 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatb
 
         // 🤖 3차 시도: Pollinations도 실패 시, 그때 비로소 AI(gpt-5.4-mini)를 써서 프롬프트 완화 후 FactChat 재시도!
         console.warn("⚠️ [2차 Pollinations 실패] 3차: AI(gpt-5.4-mini)로 프롬프트를 안전하게 완화하여 FactChat에 재전송합니다...");
-        let fallback = await rewritePromptSafelyWithAi(prompt, isChatbotMode);
+        let fallback = await rewritePromptSafelyWithAi(rawPrompt, isChatbotMode);
         if (fallback) {
             console.log(`🤖 [3차 AI 지능형 안전 재작성 프롬프트]:\n${fallback}`);
         } else {
-            fallback = fallbackPrompt ? sanitizeImagePrompt(fallbackPrompt) : sanitized;
+            fallback = fallbackPrompt ? cleanPromptFormat(fallbackPrompt) : sanitizeImagePrompt(rawPrompt);
             console.log(`🎨 [3차 기본 안전 템플릿 프롬프트]:\n${fallback}`);
         }
         

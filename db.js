@@ -6,14 +6,16 @@ const { getFirestore } = require('firebase-admin/firestore');
 
 // 1. Firebase Admin SDK 초기화
 let serviceAccount = null;
-const keyPath = path.join(__dirname, 'serviceAccountKey.json');
+const localKeyPath = path.join(__dirname, 'serviceAccountKey.json');
+const renderKeyPath = '/etc/secrets/serviceAccountKey.json';
+const keyPath = fs.existsSync(localKeyPath) ? localKeyPath : (fs.existsSync(renderKeyPath) ? renderKeyPath : null);
 
-if (fs.existsSync(keyPath)) {
+if (keyPath) {
     try {
         serviceAccount = require(keyPath);
-        console.log("📄 [Firebase] serviceAccountKey.json 파일을 로드했습니다.");
+        console.log(`📄 [Firebase] 키 파일(${keyPath})을 로드했습니다.`);
     } catch (e) {
-        console.error("❌ [Firebase] serviceAccountKey.json 읽기 실패:", e.message);
+        console.error("❌ [Firebase] 키 파일 읽기 실패:", e.message);
     }
 } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {

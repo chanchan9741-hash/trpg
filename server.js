@@ -20,43 +20,47 @@ const openai = new OpenAI({
 });
 
 // 2. Firebase Firestore 데이터베이스 및 모델 연동
-const { User, Scenario, Message } = require('./db');
+const { User, Scenario, Message, saveCloudImage, getCloudImage } = require('./db');
 
-// 3. Base64 이미지를 정적 파일로 저장하여 Firestore 1MB 제한을 방지하는 헬퍼 함수
-function saveBase64Image(base64String, prefix = 'img') {
-    if (!base64String || typeof base64String !== 'string') return base64String;
-    if (base64String.startsWith('http://') || base64String.startsWith('https://') || base64String.startsWith('/image/')) {
-        return base64String;
-    }
-    try {
-        const matches = base64String.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-        let ext = 'png';
-        let data = base64String;
-        if (matches) {
-            ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-            data = matches[2];
-        } else if (base64String.startsWith('data:image')) {
-            data = base64String.split(',')[1] || base64String;
-        }
-        const buffer = Buffer.from(data, 'base64');
-        const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
-        const uploadDir = path.join(__dirname, 'public', 'image');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        fs.writeFileSync(path.join(uploadDir, filename), buffer);
-        console.log(`💾 [이미지 정적 저장] base64 -> /image/${filename} (${Math.round(buffer.length / 1024)} KB)`);
-        return `/image/${filename}`;
-    } catch (err) {
-        console.error("❌ 이미지 파일 저장 에러:", err.message);
-        return base64String;
-    }
+// 3. 구글 클라우드(Firestore) 영구 저장 헬퍼 함수
+async function saveBase64Image(base64String, prefix = 'img') {
+    return await saveCloudImage(base64String, prefix);
 }
 
 // 4. 미들웨어 설정
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public')); 
+
+// 🖼️ 구글 클라우드 영구 이미지 서빙 라우트 (로컬 디스크 캐시 확인 후 없을 시 Firestore 클라우드에서 복원)
+app.get('/image/:filename', async (req, res) => {
+    const filename = req.params.filename;
+    const localPath = path.join(__dirname, 'public', 'image', filename);
+
+    if (fs.existsSync(localPath)) {
+        return res.sendFile(localPath);
+    }
+
+    try {
+        const cloudImg = await getCloudImage(filename);
+        if (!cloudImg) {
+            return res.status(404).send("이미지를 찾을 수 없습니다.");
+        }
+
+        try {
+            const cacheDir = path.join(__dirname, 'public', 'image');
+            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+            fs.writeFileSync(localPath, cloudImg.buffer);
+        } catch (_) {}
+
+        res.set('Content-Type', cloudImg.contentType);
+        res.set('Cache-Control', 'public, max-age=31536000'); // 브라우저 캐시 1년
+        return res.send(cloudImg.buffer);
+    } catch (err) {
+        console.error("❌ 이미지 서빙 오류:", err.message);
+        return res.status(500).send("이미지 로드 실패");
+    }
+}); 
 app.use(express.json());
 app.use(session({
     secret: process.env.SESSION_SECRET || 'trpg_secret',
@@ -822,8 +826,8 @@ app.post('/api/generate-image', async (req, res) => {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            // 🚨 Firestore 1MB 제한 방지: base64 이미지를 정적 파일로 저장
-            const savedUrl = saveBase64Image(extractedImage, `scene_${scenarioId}`);
+            // 🚨 구글 클라우드(Firestore) 영구 저장
+            const savedUrl = await saveBase64Image(extractedImage, `scene_${scenarioId}`);
 
             console.log("✅ 이미지 생성 및 데이터 파싱 완료! 경로:", savedUrl);
             // 프론트엔드로 조립된 데이터를 보냅니다.
@@ -843,7 +847,7 @@ app.post('/api/chat/save-image', async (req, res) => {
     try {
         let { scenarioId, role, content } = req.body;
         if (content && typeof content === 'string' && content.startsWith('data:image')) {
-            content = saveBase64Image(content, `chat_${scenarioId}`);
+            content = await saveBase64Image(content, `chat_${scenarioId}`);
         }
         await Message.create({
             scenarioId,
@@ -920,8 +924,8 @@ app.post('/api/generate-player-image', async (req, res) => {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            // 🚨 Firestore 1MB 제한 방지: base64 이미지를 정적 파일로 저장
-            const savedUrl = saveBase64Image(extractedImage, `portrait_${scenarioId}`);
+            // 🚨 구글 클라우드(Firestore) 영구 저장
+            const savedUrl = await saveBase64Image(extractedImage, `portrait_${scenarioId}`);
 
             // ✅ 5. DB에 저장 및 프론트엔드로 전송
             scenario.playerImageUrl = savedUrl;

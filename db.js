@@ -199,6 +199,9 @@ function ScenarioModel(data) {
     Object.assign(this, wrapScenario(null, defaultData));
 
     this.save = async function() {
+        if (this.playerImageUrl && this.playerImageUrl.startsWith('data:image')) {
+            this.playerImageUrl = await saveCloudImage(this.playerImageUrl, `portrait_${this.userId || 'user'}`);
+        }
         const firestore = checkDb();
         const plainData = {
             userId: this.userId,
@@ -307,6 +310,9 @@ ScenarioModel.findById = async function(id) {
 };
 
 ScenarioModel.updateDocument = async function(id, scenario) {
+    if (scenario.playerImageUrl && scenario.playerImageUrl.startsWith('data:image')) {
+        scenario.playerImageUrl = await saveCloudImage(scenario.playerImageUrl, `portrait_${id}`);
+    }
     const firestore = checkDb();
     const plainData = {
         title: scenario.title,
@@ -447,10 +453,98 @@ const Message = {
     }
 };
 
+// 5. Cloud Image 저장소 (Firestore 청크 분할 저장 - 무료 플랜 영구 보관)
+async function saveCloudImage(base64String, prefix = 'img') {
+    if (!base64String || typeof base64String !== 'string') return base64String;
+    if (base64String.startsWith('http://') || base64String.startsWith('https://') || (base64String.startsWith('/image/') && !base64String.startsWith('/image/data:'))) {
+        return base64String;
+    }
+    const firestore = checkDb();
+    try {
+        const matches = base64String.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+        let ext = 'png';
+        let contentType = 'image/png';
+        let rawData = base64String;
+        if (matches) {
+            ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+            contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+            rawData = matches[2];
+        } else if (base64String.startsWith('data:image')) {
+            rawData = base64String.split(',')[1] || base64String;
+        }
+
+        const buffer = Buffer.from(rawData, 'base64');
+        const imageId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const CHUNK_SIZE = 700 * 1024; // 700KB (Firestore 1MB 문서 한도 내 안전 분할)
+        const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
+
+        const metaRef = firestore.collection('cloud_images').doc(imageId);
+        const batch = firestore.batch();
+        batch.set(metaRef, {
+            contentType,
+            ext,
+            totalSize: buffer.length,
+            totalChunks,
+            createdAt: new Date()
+        });
+
+        for (let i = 0; i < totalChunks; i++) {
+            const chunkBuf = buffer.subarray(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            const chunkRef = metaRef.collection('chunks').doc(String(i));
+            batch.set(chunkRef, { data: chunkBuf });
+        }
+        await batch.commit();
+
+        // 로컬 디스크 캐시 (로컬 환경 및 Render 프로세스 수명 내 초고속 응답)
+        try {
+            const cacheDir = path.join(__dirname, 'public', 'image');
+            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+            fs.writeFileSync(path.join(cacheDir, `${imageId}.${ext}`), buffer);
+        } catch (_) {}
+
+        console.log(`☁️ [구글 클라우드 영구 저장 완료] /image/${imageId}.${ext} (${Math.round(buffer.length / 1024)} KB, ${totalChunks} 청크)`);
+        return `/image/${imageId}.${ext}`;
+    } catch (err) {
+        console.error("❌ 클라우드 이미지 저장 에러:", err.message);
+        return base64String;
+    }
+}
+
+async function getCloudImage(filenameOrId) {
+    const firestore = checkDb();
+    try {
+        const parts = filenameOrId.split('.');
+        const imageId = parts.length > 1 ? parts.slice(0, -1).join('.') : filenameOrId;
+
+        let metaDoc = await firestore.collection('cloud_images').doc(imageId).get();
+        if (!metaDoc.exists) {
+            metaDoc = await firestore.collection('cloud_images').doc(filenameOrId).get();
+            if (!metaDoc.exists) return null;
+        }
+
+        const meta = metaDoc.data();
+        const chunksSnap = await metaDoc.ref.collection('chunks').get();
+        if (chunksSnap.empty) return null;
+
+        const sortedDocs = chunksSnap.docs.sort((a, b) => Number(a.id) - Number(b.id));
+        const fullBuffer = Buffer.concat(sortedDocs.map(d => d.data().data));
+
+        return {
+            buffer: fullBuffer,
+            contentType: meta.contentType || 'image/png'
+        };
+    } catch (err) {
+        console.error("❌ 클라우드 이미지 읽기 에러:", err.message);
+        return null;
+    }
+}
+
 module.exports = {
     db,
     admin,
     User,
     Scenario: ScenarioModel,
-    Message
+    Message,
+    saveCloudImage,
+    getCloudImage
 };

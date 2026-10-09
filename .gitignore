@@ -2,3 +2,8 @@
 node_modules/
 serviceAccountKey.json
 *firebase*.json
+public/image/img_*
+public/image/portrait_*
+public/image/scene_*
+public/image/chat_*
+

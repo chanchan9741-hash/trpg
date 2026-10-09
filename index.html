@@ -7,22 +7,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gemini TRPG - Dashboard</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <script>
+        (function () {
+            var b = location.protocol === 'file:' ? 'public/' : '/';
+            document.write('<script src="' + b + 'js/theme.js"><\/script>' +
+                '<link rel="stylesheet" href="' + b + 'css/theme.css">' +
+                '<link rel="stylesheet" href="' + b + 'css/sidebar.css">' +
+                '<script src="' + b + 'js/sidebar.js"><\/script>');
+        })();
+    </script>
     <style>
         /* 🎨 TRPG 다크 판타지 테마 색상 적용 */
-        :root {
-            --bg-dark-brown: #3E2723;    /* 바탕 배경 */
-            --bg-beige: #F5F5DC;         /* 카드/네비게이션 배경 */
-            --accent-blue-gray: #607D8B; /* 버튼/포인트 색상 */
-            --white: #FFFFFF;
-            --text-black: #000000;
-            --text-gray: #555555;
-        }
 
         body {
             font-family: 'Pretendard', sans-serif;
             background-color: var(--bg-dark-brown);
-            color: var(--bg-beige); /* 바깥 텍스트는 밝게 */
+            color: var(--text-primary);
             margin: 0;
             display: flex;
             flex-direction: column;
@@ -34,20 +35,33 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 5%;
+            height: 60px;
+            box-sizing: border-box;
+            padding: 0 32px;
             background-color: var(--bg-beige);
-            border-bottom: 2px solid var(--white);
+            border-bottom: 1px solid var(--border);
             color: var(--text-black);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
 
         .logo { font-size: 1.5rem; font-weight: bold; color: var(--accent-blue-gray); cursor: pointer; }
-        .user-menu { display: flex; align-items: center; gap: 15px; font-weight: bold; color: #333; }
+        .nav-left { display: flex; align-items: center; gap: 8px; }
+        .nav-left .logo { display: none; }
+        @media (max-width: 768px) {
+            nav { padding: 0 16px; }
+            main { padding: 1.5rem 16px; }
+            .nav-left .logo { display: block; font-size: 1.25rem; }
+            .hero-section h1 { font-size: 1.8rem; }
+        }
+        .user-menu { display: flex; align-items: center; gap: 15px; font-weight: bold; color: var(--text-primary); }
 
         /* 메인 컨텐츠 */
         main {
             flex: 1;
-            padding: 2rem 5%;
+            padding: 2rem 32px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            box-sizing: border-box;
         }
 
         .hero-section {
@@ -55,8 +69,8 @@
             text-align: left;
         }
 
-        .hero-section h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--bg-beige); text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-        .hero-section p { color: #cccccc; }
+        .hero-section h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--text-primary); }
+        .hero-section p { color: var(--text-secondary); }
 
         /* 시나리오 카드 그리드 */
         .grid {
@@ -71,8 +85,8 @@
             background-color: var(--bg-beige);
             border-radius: 12px;
             padding: 20px;
-            border: 2px solid var(--white);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(26,25,24,0.06);
             transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
             cursor: pointer;
             color: var(--text-black);
@@ -80,15 +94,19 @@
 
         .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            box-shadow: 0 8px 20px rgba(26,25,24,0.10);
             border-color: var(--accent-blue-gray);
         }
 
         .card h3 { 
             margin: 0 0 10px 0; 
             color: var(--text-black); 
-            border-bottom: 2px solid var(--accent-blue-gray); 
+            border-bottom: 1px solid var(--border); 
             padding-bottom: 8px;
+            padding-right: 80px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .card p { font-size: 0.95rem; color: var(--text-gray); height: 40px; overflow: hidden; line-height: 1.4;}
         
@@ -108,9 +126,9 @@
             right: 15px;
             width: 32px;
             height: 32px;
-            background-color: rgba(255, 77, 77, 0.1);
-            color: #d63031;
-            border: 1px solid #d63031;
+            background-color: var(--brand-soft);
+            color: var(--brand);
+            border: 1px solid var(--brand);
             border-radius: 6px;
             display: flex;
             align-items: center;
@@ -121,7 +139,7 @@
         }
 
         .delete-btn:hover {
-            background-color: #d63031;
+            background-color: var(--brand);
             color: white;
             transform: scale(1.1);
         }
@@ -133,9 +151,9 @@
             right: 55px; /* 삭제 버튼 왼쪽에 배치 */
             width: 32px;
             height: 32px;
-            background-color: rgba(40, 167, 69, 0.1);
-            color: #28a745;
-            border: 1px solid #28a745;
+            background-color: var(--surface-2);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
             border-radius: 6px;
             display: flex;
             align-items: center;
@@ -146,8 +164,8 @@
         }
 
         .edit-btn:hover {
-            background-color: #28a745;
-            color: white;
+            background-color: var(--text-primary);
+            color: var(--surface);
             transform: scale(1.1);
         }
 
@@ -165,25 +183,72 @@
             font-size: 1rem;
         }
 
-        .btn-primary { background-color: var(--accent-blue-gray); color: white; border: 1px solid var(--white); }
-        .btn-outline { background-color: var(--white); border: 2px solid var(--accent-blue-gray); color: var(--accent-blue-gray); }
+        .btn-primary { background-color: var(--brand); color: white; border: 1px solid var(--brand); }
+        .btn-outline { background-color: var(--surface); border: 1px solid var(--border-strong); color: var(--text-primary); }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); }
 
         #scenario-list-empty {
             text-align: center;
             padding: 50px;
-            color: #aaa;
+            color: var(--text-tertiary);
             grid-column: 1 / -1;
-            background: rgba(0,0,0,0.2);
+            background: var(--surface);
             border-radius: 12px;
-            border: 1px dashed #777;
+            border: 1px dashed var(--border-strong);
         }
     </style>
 </head>
-<body>
+<body class="has-sidebar">
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a class="sidebar-logo" href="/"><i class="bi bi-dice-5-fill"></i><span>Gemini TRPG</span></a>
+            <button class="icon-btn" onclick="toggleSidebar()" title="사이드바 접기/펼치기" aria-label="사이드바 접기/펼치기">
+                <i class="bi bi-layout-sidebar"></i>
+            </button>
+        </div>
+
+        <div class="sidebar-menu">
+            <a class="sidebar-item active" href="/" title="홈"><i class="bi bi-house"></i><span class="sidebar-label">홈</span></a>
+            <a class="sidebar-item" href="/create" title="새 시나리오"><i class="bi bi-plus-circle"></i><span class="sidebar-label">새 시나리오</span></a>
+            <a class="sidebar-item" href="#scenario-grid" title="내 시나리오"><i class="bi bi-collection"></i><span class="sidebar-label">내 시나리오</span></a>
+        </div>
+
+        <div class="sidebar-section-title">추가 영역</div>
+        <div class="sidebar-content">
+            <p style="padding: 0 12px; margin: 4px 0; color: var(--text-tertiary);">여기에 원하는 내용을 채우세요.</p>
+        </div>
+
+        <div class="sidebar-account">
+            <div class="account-full">
+                <div id="account-guest">
+                    <p class="account-guest-text">지금 로그인하고<br>모든 기능을 자유롭게 이용하세요</p>
+                    <button class="account-login-btn" onclick="location.href='/auth/google'"><i class="bi bi-google"></i> Google로 시작하기</button>
+                </div>
+                <div id="account-member" class="account-user" hidden>
+                    <div class="account-avatar" id="account-avatar">?</div>
+                    <div class="account-name" id="account-name"></div>
+                    <button class="icon-btn" onclick="location.href='/auth/logout'" title="로그아웃" aria-label="로그아웃"><i class="bi bi-box-arrow-right"></i></button>
+                </div>
+                <div class="account-divider"></div>
+                <label class="theme-row">
+                    <span><i data-theme-icon class="bi bi-moon-stars"></i> 다크 모드</span>
+                    <span class="switch"><input type="checkbox" data-theme-switch aria-label="다크 모드"><span class="track"></span></span>
+                </label>
+            </div>
+            <div class="account-rail">
+                <button class="icon-btn" data-account-action onclick="location.href='/auth/google'" title="로그인"><i class="bi bi-person-circle"></i></button>
+                <button class="icon-btn" onclick="toggleTheme()" title="다크 모드 전환"><i data-theme-icon class="bi bi-moon-stars"></i></button>
+            </div>
+        </div>
+    </aside>
+    <div class="sidebar-backdrop" onclick="closeSidebar()"></div>
 
     <nav>
-        <div class="logo" onclick="location.href='/'">Gemini TRPG</div>
+        <div class="nav-left">
+            <button class="icon-btn sidebar-open-btn" onclick="openSidebar()" title="메뉴 열기" aria-label="메뉴 열기"><i class="bi bi-list"></i></button>
+            <div class="logo" onclick="location.href='/'">Gemini TRPG</div>
+        </div>
         <div class="user-menu" id="auth-menu">
             <span id="user-name">불러오는 중...</span>
             <button class="btn btn-outline" id="auth-btn" style="padding: 8px 15px; font-size: 0.9rem;">연결 중...</button>
@@ -199,7 +264,7 @@
             </button>
         </section>
 
-        <h2 style="color: var(--bg-beige); border-bottom: 2px solid var(--accent-blue-gray); padding-bottom: 10px; display: inline-block;">내 시나리오 목록</h2>
+        <h2 style="color: var(--text-primary); border-bottom: 2px solid var(--brand); padding-bottom: 10px; display: inline-block;">내 시나리오 목록</h2>
         <div class="grid" id="scenario-grid" style="margin-top: 20px;">
             <div id="scenario-list-empty">로그인하여 시나리오를 확인하세요.</div>
         </div>
@@ -263,7 +328,7 @@
                             <h3>${s.title}</h3>
                             <p>${s.worldSetting || '설명이 없습니다.'}</p>
                             <div class="card-footer">
-                                <span>📅 ${new Date(s.createdAt).toLocaleDateString()}</span>
+                                <span><i class="bi bi-calendar3"></i> ${new Date(s.createdAt).toLocaleDateString()}</span>
                                 <span>입장하기 <i class="bi bi-arrow-right"></i></span>
                             </div>
                         `;

@@ -4,17 +4,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
     <title>새 시나리오 만들기 - Gemini TRPG</title>
+    <script>
+        (function () {
+            var b = location.protocol === 'file:' ? 'public/' : '/';
+            document.write('<script src="' + b + 'js/theme.js"><\/script>' +
+                '<link rel="stylesheet" href="' + b + 'css/theme.css">');
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
-        body { background: #121212; color: white; font-family: sans-serif; padding: 50px; }
-        .container { max-width: 600px; margin: 0 auto; background: #1e1e1e; padding: 30px; border-radius: 15px; }
-        input, textarea { width: 100%; padding: 12px; margin: 10px 0; background: #333; border: 1px solid #444; color: white; border-radius: 5px; }
-        button { width: 100%; padding: 15px; background: #6c5ce7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        label { color: #b3b3b3; font-size: 0.9rem; }
+        body { background: var(--bg-screen); color: var(--text-primary); font-family: sans-serif; padding: 50px; }
+        .container { max-width: 600px; margin: 0 auto; background: var(--surface); padding: 30px; border-radius: 15px; border: 1px solid var(--border); }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; background: var(--surface); border: 1px solid var(--border-strong); color: var(--text-primary); border-radius: 5px; }
+        button { width: 100%; padding: 15px; background: var(--brand); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        label { color: var(--text-secondary); font-size: 0.9rem; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>📜 새 시나리오 생성</h2>
+        <h2><i class="bi bi-journal-plus"></i> 새 시나리오 생성</h2>
         <label>시나리오 제목</label>
         <input type="text" id="title" placeholder="예: 무너진 왕국의 비밀">
         
@@ -25,12 +33,12 @@
         <textarea id="charInfo" rows="3" placeholder="이름, 직업, 특징 등..."></textarea>
 
         <div class="form-group">
-    <label for="appearance">캐릭터 외형 묘사 👤</label>
+    <label for="appearance"><i class="bi bi-person"></i> 캐릭터 외형 묘사</label>
     <textarea id="appearance" placeholder="예: 은발의 긴 머리, 붉은 눈동자, 낡은 검은색 가죽 갑옷을 입고 있는 날카로운 인상의 전사" required></textarea>
 </div>
 
 <div class="form-group">
-    <label for="artStyle">초상화 화풍 (그림 스타일) 🎨</label>
+    <label for="artStyle"><i class="bi bi-palette"></i> 초상화 화풍 (그림 스타일)</label>
     <select id="artStyle" required>
         <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
         <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>

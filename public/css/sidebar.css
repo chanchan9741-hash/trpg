@@ -1,0 +1,95 @@
+:root { --sidebar-w: 260px; --sidebar-w-collapsed: 68px; }
+
+.sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000;
+    width: var(--sidebar-w);
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    transition: width 0.2s ease, transform 0.25s ease;
+    overflow: hidden;
+}
+body.has-sidebar { padding-left: var(--sidebar-w); transition: padding-left 0.2s ease; box-sizing: border-box; }
+
+.sidebar-header { display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 14px 0 20px; flex-shrink: 0; }
+.sidebar-logo { display: flex; align-items: center; gap: 8px; color: var(--brand); font-weight: 800; font-size: 1.2rem; text-decoration: none; white-space: nowrap; }
+.sidebar-logo i { font-size: 1.4rem; }
+.icon-btn {
+    width: 36px; height: 36px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: 8px; padding: 0;
+    color: var(--text-secondary); font-size: 1.15rem; cursor: pointer; transition: background 0.15s;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text-primary); transform: none; opacity: 1; }
+
+.sidebar-menu { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; }
+.sidebar-item {
+    display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px;
+    border-radius: 10px; color: var(--text-secondary); text-decoration: none; font-weight: 600; white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+.sidebar-item i { font-size: 1.15rem; width: 20px; text-align: center; flex-shrink: 0; }
+.sidebar-item:hover { background: var(--surface-2); color: var(--text-primary); }
+.sidebar-item.active { background: var(--brand-soft); color: var(--brand); }
+.sidebar-section-title { padding: 16px 24px 6px; font-size: 0.78rem; font-weight: 700; color: var(--text-tertiary); white-space: nowrap; }
+
+.sidebar-content { flex: 1; overflow-y: auto; padding: 0 12px; color: var(--text-secondary); font-size: 0.9rem; }
+
+.sidebar [hidden] { display: none !important; }
+.sidebar-account { margin: 12px; padding: 16px; border-radius: 14px; background: var(--bg-screen); border: 1px solid var(--border); flex-shrink: 0; }
+.account-guest-text { text-align: center; font-size: 0.88rem; line-height: 1.5; color: var(--text-primary); margin: 0 0 12px; }
+.account-login-btn {
+    width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary);
+    font-weight: 700; font-size: 0.9rem; cursor: pointer; padding: 0;
+}
+.account-login-btn:hover { background: var(--surface-2); transform: none; opacity: 1; }
+.account-user { display: flex; align-items: center; gap: 10px; }
+.account-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.account-name { flex: 1; min-width: 0; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-divider { height: 1px; background: var(--border); margin: 14px 0 12px; }
+.theme-row { display: flex; align-items: center; justify-content: space-between; color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; }
+.theme-row span { display: flex; align-items: center; gap: 8px; }
+
+.switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch .track { position: absolute; inset: 0; border-radius: 22px; background: var(--border-strong); transition: background 0.2s; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.switch input:checked + .track { background: var(--brand); }
+.switch input:checked + .track::after { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.account-rail { display: none; flex-direction: column; align-items: center; gap: 6px; }
+
+html.sidebar-collapsed .sidebar { width: var(--sidebar-w-collapsed); }
+html.sidebar-collapsed body.has-sidebar { padding-left: var(--sidebar-w-collapsed); }
+html.sidebar-collapsed .sidebar-header { justify-content: center; padding: 0; }
+html.sidebar-collapsed .sidebar-logo,
+html.sidebar-collapsed .sidebar-label,
+html.sidebar-collapsed .sidebar-section-title,
+html.sidebar-collapsed .sidebar-content,
+html.sidebar-collapsed .account-full { display: none; }
+html.sidebar-collapsed .sidebar-item { justify-content: center; padding: 0; }
+html.sidebar-collapsed .sidebar-menu { padding: 8px; }
+html.sidebar-collapsed .sidebar-account { margin: auto 8px 12px; padding: 8px 0; background: transparent; border: none; }
+html.sidebar-collapsed .account-rail { display: flex; }
+
+.sidebar-open-btn { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 768px) {
+    body.has-sidebar, html.sidebar-collapsed body.has-sidebar { padding-left: 0; }
+    .sidebar, html.sidebar-collapsed .sidebar { width: 280px; transform: translateX(-100%); box-shadow: none; }
+    html.sidebar-open .sidebar { transform: translateX(0); box-shadow: 0 0 40px var(--shadow); }
+    html.sidebar-collapsed .sidebar-header { justify-content: space-between; padding: 0 14px 0 20px; }
+    html.sidebar-collapsed .sidebar-logo { display: flex; }
+    html.sidebar-collapsed .sidebar-label { display: inline; }
+    html.sidebar-collapsed .sidebar-section-title, html.sidebar-collapsed .sidebar-content, html.sidebar-collapsed .account-full { display: block; }
+    html.sidebar-collapsed .sidebar-item { justify-content: flex-start; padding: 0 12px; }
+    html.sidebar-collapsed .sidebar-menu { padding: 8px 12px; }
+    html.sidebar-collapsed .sidebar-account { margin: 12px; padding: 16px; background: var(--bg-screen); border: 1px solid var(--border); }
+    html.sidebar-collapsed .account-rail { display: none; }
+    .sidebar-open-btn { display: inline-flex; }
+    .sidebar-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(0, 0, 0, 0.45); }
+    html.sidebar-open .sidebar-backdrop { display: block; }
+}

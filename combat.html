@@ -3,7 +3,8 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
-    <title>⚔️ 턴제 전투 돌입!</title>
+    <title>턴제 전투 돌입!</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <style>
         /* 🎨 배경 이미지와 어두운 필터 겹치기 */
         body { 
@@ -26,8 +27,8 @@
         .container { display: flex; justify-content: space-between; align-items: center; flex: 1; padding: 0 20px; }
         .btn { padding: 15px; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; color: white; border: none; transition: 0.2s; }
         .btn:hover { filter: brightness(1.2); }
-        .btn:disabled { background: #555 !important; border-color: #333 !important; cursor: not-allowed; opacity: 0.7; }
-        #combat-log { background: rgba(0,0,0,0.7); border: 2px solid #f39c12; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 1.1rem; font-weight: bold; color: #f1c40f; min-height: 25px; transition: 0.3s; }
+        .btn:disabled { background: #42413D !important; border-color: #1A1918 !important; cursor: not-allowed; opacity: 0.7; }
+        #combat-log { background: rgba(0,0,0,0.7); border: 2px solid #FF4432; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 1.1rem; font-weight: bold; color: #FFB938; min-height: 25px; transition: 0.3s; }
         .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
         
         /* 📱 모바일 전용 스타일 (화면 폭이 768px 이하일 때만 발동) */
@@ -91,26 +92,26 @@
 
 </head>
 <body>
-    <h2 style="color: #e74c3c; text-align: center; margin-top: 0;">⚠️ 야생의 적이 나타났다!</h2>
+    <h2 style="color: #FF4432; text-align: center; margin-top: 0;"><i class="bi bi-exclamation-triangle-fill"></i> 야생의 적이 나타났다!</h2>
     <div id="combat-log">행동을 선택하십시오!</div>
 
     <div class="container">
         <!-- 왼쪽: 플레이어 -->
         <div style="text-align: center;">
-            <div id="player-sprite" class="sprite" style="font-size: 5rem;">👤</div>
+            <div id="player-sprite" class="sprite" style="font-size: 5rem;"><i class="bi bi-person-fill"></i></div>
             <h3 style="margin-bottom:5px;">나 (공: <span id="my-atk">0</span> / 방: <span id="my-def">0</span>)</h3>
-            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #7f8c8d; position: relative; margin: 0 auto; overflow: hidden;">
-                <div id="my-hp-fill" style="background: #27ae60; height: 100%; width: 100%; transition: width 0.3s;"></div>
+            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #61605A; position: relative; margin: 0 auto; overflow: hidden;">
+                <div id="my-hp-fill" style="background: #00B58B; height: 100%; width: 100%; transition: width 0.3s;"></div>
                 <div id="my-hp-text" style="position: absolute; top: 0; left: 0; width: 100%; text-align: center; line-height: 25px; font-weight: bold;"></div>
             </div>
         </div>
-        <div style="font-size: 3rem; color: #f39c12; font-style: italic; font-weight: bold;">VS</div>
+        <div style="font-size: 3rem; color: #FF4432; font-style: italic; font-weight: bold;">VS</div>
         <!-- 오른쪽: 몬스터 -->
         <div style="text-align: center;">
-            <div id="enemy-sprite" class="sprite" style="font-size: 5rem;">👿</div>
+            <div id="enemy-sprite" class="sprite" style="font-size: 5rem;"><i class="bi bi-emoji-angry-fill"></i></div>
             <h3 id="enemy-name" style="margin-bottom:5px;">로딩중...</h3>
-            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #7f8c8d; position: relative; margin: 0 auto; overflow: hidden;">
-                <div id="hp-fill" style="background: #e74c3c; height: 100%; width: 100%; transition: width 0.3s;"></div>
+            <div style="background: #000; border-radius: 10px; height: 25px; width: 150px; border: 2px solid #61605A; position: relative; margin: 0 auto; overflow: hidden;">
+                <div id="hp-fill" style="background: #FF4432; height: 100%; width: 100%; transition: width 0.3s;"></div>
                 <div id="hp-text" style="position: absolute; top: 0; left: 0; width: 100%; text-align: center; line-height: 25px; font-weight: bold;"></div>
             </div>
         </div>
@@ -121,20 +122,20 @@
         
         <!-- 윗줄: 공격 및 스킬 -->
         <div class="action-row">
-            <button class="btn action-btn" style="background: #c0392b; border: 2px solid #e74c3c; flex: 1; min-width: 120px;" onclick="action('attack')">⚔️ 일반 공격</button>
+            <button class="btn action-btn" style="background: #FF4432; border: 2px solid #FF4432; flex: 1; min-width: 120px;" onclick="action('attack')"><i class="bi bi-lightning-charge-fill"></i> 일반 공격</button>
             <div style="display: flex; flex: 2; min-width: 200px;">
-                <select id="skill-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #ecf0f1; cursor: pointer; color: #333; font-weight: bold;"></select>
-                <button class="btn action-btn" style="background: #2980b9; border: 2px solid #3498db; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('skill')">✨ 사용</button>
+                <select id="skill-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #F0EFEB; cursor: pointer; color: #1A1918; font-weight: bold;"></select>
+                <button class="btn action-btn" style="background: #1A88FF; border: 2px solid #64B0F7; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('skill')"><i class="bi bi-stars"></i> 사용</button>
             </div>
         </div>
 
         <!-- 아랫줄: 아이템 및 도망 -->
         <div class="action-row" style="margin-bottom: 0;">
             <div style="display: flex; flex: 2; min-width: 200px;">
-                <select id="item-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #ecf0f1; cursor: pointer; color: #333; font-weight: bold;"></select>
-                <button class="btn action-btn" style="background: #27ae60; border: 2px solid #2ecc71; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('item')">💊 먹기</button>
+                <select id="item-select" style="flex: 2; padding: 10px; border-radius: 8px 0 0 8px; border: none; font-size: 1.1rem; background: #F0EFEB; cursor: pointer; color: #1A1918; font-weight: bold;"></select>
+                <button class="btn action-btn" style="background: #00B58B; border: 2px solid #00D1A0; margin: 0; border-radius: 0 8px 8px 0; flex: 1; min-width: 80px;" onclick="action('item')"><i class="bi bi-capsule"></i> 먹기</button>
             </div>
-            <button class="btn action-btn" style="background: #7f8c8d; border: 2px solid #95a5a6; flex: 1; min-width: 120px;" onclick="action('run')">🏃 도망</button>
+            <button class="btn action-btn" style="background: #61605A; border: 2px solid #85837D; flex: 1; min-width: 120px;" onclick="action('run')"><i class="bi bi-person-walking"></i> 도망</button>
         </div>
 
     </div>
@@ -246,9 +247,10 @@
             btns.forEach(btn => btn.disabled = !isPlayerTurn);
         }
 
-        function log(msg, color = "#f1c40f") {
+        function log(msg, color = "#FFB938", icon = "") {
             const logBox = document.getElementById('combat-log');
             logBox.innerText = msg;
+            if (icon) { const ic = document.createElement('i'); ic.className = 'bi bi-' + icon; ic.style.marginRight = '6px'; logBox.prepend(ic); }
             logBox.style.color = color;
         }
 
@@ -258,7 +260,7 @@
             isPlayerTurn = false; 
 
             if (type === 'run') {
-                log(`🏃 무사히 도망쳤다...`);
+                log(`무사히 도망쳤다...`, undefined, 'person-walking');
                 setTimeout(() => {
                     window.opener.finishCombat(enemy.name, 'run', myHp, getUsedItemsTag());
                     window.close();
@@ -270,7 +272,7 @@
             if (type === 'item') {
                 const itemKey = document.getElementById('item-select').value;
                 if (!itemKey) {
-                    log(`⚠️ 사용할 아이템이 없습니다!`);
+                    log(`사용할 아이템이 없습니다!`, undefined, 'exclamation-triangle-fill');
                     isPlayerTurn = true; // 취소되므로 턴 돌려줌
                     updateUI();
                     return;
@@ -289,7 +291,7 @@
                 usedItems[itemKey] = (usedItems[itemKey] || 0) + 1;
 
                 let cleanItemName = itemKey.split('(')[0].trim();
-                log(`💊 [${cleanItemName}] 마심! 체력을 ${healAmount} 회복했습니다.`, "#2ecc71");
+                log(`[${cleanItemName}] 마심! 체력을 ${healAmount} 회복했습니다.`, "#00D1A0", 'capsule');
                 
                 updateUI();
                 updateItemUI(); // 포션 개수 갱신
@@ -307,7 +309,7 @@
             } else if (type === 'skill') {
                 const rawSkillName = document.getElementById('skill-select').value;
                 if (!rawSkillName) {
-                    log(`⚠️ 스킬이 없습니다! 일반 공격으로 대체합니다.`);
+                    log(`스킬이 없습니다! 일반 공격으로 대체합니다.`, undefined, 'exclamation-triangle-fill');
                     damage = Math.max(1, myStats.attack - enemy.defense);
                     actionName = "일반 공격";
                 } else {
@@ -323,7 +325,7 @@
 
             enemy.hp -= damage;
             shakeTarget('enemy-sprite');
-            log(`✨ [${actionName}] ${enemy.name}에게 ${damage}의 피해!!`, "#3498db");
+            log(`[${actionName}] ${enemy.name}에게 ${damage}의 피해!!`, "#64B0F7", 'stars');
             updateUI();
 
             if (enemy.hp <= 0) checkDeath();
@@ -337,14 +339,14 @@
             let enemyDamage = Math.max(1, enemy.attack - myStats.defense + Math.floor(Math.random() * 3));
             myHp -= enemyDamage;
             shakeTarget('player-sprite');
-            log(`🩸 [적의 반격!] ${enemy.name}의 공격! 나에게 ${enemyDamage}의 피해!`, "#e74c3c");
+            log(`[적의 반격!] ${enemy.name}의 공격! 나에게 ${enemyDamage}의 피해!`, "#FF4432", 'droplet-fill');
             updateUI();
 
             if (myHp <= 0) {
                 checkDeath();
             } else {
                 setTimeout(() => {
-                    log(`▶ 내 턴이다! 행동을 선택하자.`, "#2ecc71");
+                    log(`내 턴이다! 행동을 선택하자.`, "#00D1A0", 'caret-right-fill');
                     isPlayerTurn = true;
                     updateUI();
                 }, 1000);
@@ -364,13 +366,13 @@
         function checkDeath() {
             const tags = getUsedItemsTag(); // 💡 먹은 포션 정보 챙기기!
             if (enemy.hp < 0) {
-                log(`🩸 ${enemy.name}의 숨통을 끊었습니다! (오버킬)`);
+                log(`${enemy.name}의 숨통을 끊었습니다! (오버킬)`, undefined, 'droplet-fill');
                 setTimeout(() => { window.opener.finishCombat(enemy.name, 'kill', myHp, tags); window.close(); }, 1500);
             } else if (enemy.hp === 0) {
-                log(`🪢 ${enemy.name} 기절! 완벽하게 생포했습니다!!`);
+                log(`${enemy.name} 기절! 완벽하게 생포했습니다!!`, undefined, 'link-45deg');
                 setTimeout(() => { window.opener.finishCombat(enemy.name, 'capture', myHp, tags); window.close(); }, 1500);
             } else if (myHp <= 0) {
-                log(`💀 눈앞이 깜깜해졌다... 패배했습니다.`);
+                log(`눈앞이 깜깜해졌다... 패배했습니다.`, undefined, 'x-circle-fill');
                 setTimeout(() => { window.opener.finishCombat(enemy.name, 'lose', 0, tags); window.close(); }, 1500);
             }
         }

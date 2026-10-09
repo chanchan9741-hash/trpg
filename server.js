@@ -913,26 +913,85 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
     }
 });
 
-// 🎨 이미지 생성 프롬프트 안전 필터 정제 함수
+// 🎨 이미지 생성 프롬프트 안전 필터 정제 함수 (검열 정책 content_policy_violation 방지 및 시각 의도 보존)
 function sanitizeImagePrompt(text) {
     if (!text) return "";
     return text
-        // (없음) 태그 완벽 제거
-        .replace(/(투구|갑옷|상의|하의|악세사리|장신구|무기)\s*\(\s*없음\s*\)/g, "")
-        // 안전 필터(content_policy_violation) 유발 단어 완화
-        .replace(/역바니복|역바니/g, "바니 스타일 의상")
-        .replace(/바니걸/g, "바니 스타일 의상")
-        .replace(/가슴이\s*크고/g, "매력적인 체형과")
-        .replace(/큰\s*가슴/g, "매력적인 체형")
-        .replace(/가슴/g, "상체")
-        .replace(/알몸|나체|누드|노출/g, "활동적인 옷차림")
-        .replace(/토막|사지절단/g, "상처")
+        // (없음) 관련 태그 및 빈 슬롯 완전 제거
+        .replace(/(투구|갑옷|상의|하의|악세사리|장신구|무기|장비)\s*\(\s*없음\s*\)/gi, "")
+        .replace(/\(없음\)/g, "")
+        // 의상 / 코스튬 / 노출 관련 완화 (토끼 귀 머리띠 + 블랙 파티 이브닝 드레스 등 세련된 의상으로 변환)
+        .replace(/역바니복|역바니|바니걸|바니수트|바니슈트|바니의상|바니\s*복장|바니/gi, "귀여운 토끼 귀 머리띠와 세련된 블랙 파티 이브닝 드레스")
+        .replace(/메이드복|바니메이드/gi, "단정하고 귀여운 클래식 메이드 원피스")
+        .replace(/란제리|속옷|팬티|브라|비키니|수영복|시스루/gi, "세련된 사복 원피스")
+        .replace(/알몸|나체|누드|전라|반라|노출/gi, "단정하고 세련된 옷차림")
+        // 신체 묘사 완화
+        .replace(/(가슴이\s*크고|큰\s*가슴|거유|폭유|글래머|풍만한\s*가슴)/gi, "매력적인 체형과 옷태")
+        .replace(/가슴|유방|바스트/gi, "상체 실루엣")
+        .replace(/골반|엉덩이|허벅지|다리\s*사이/gi, "매력적인 자태")
+        // 스킨십 / 애정 / 성적 표현 완화 (로맨틱하고 감성적인 표현으로 우회)
+        .replace(/스킨십|스킨쉽|애무|더듬|터치|손길/gi, "다정하게 눈을 맞추며 손을 꼭 잡는 설레는 순간")
+        .replace(/키스|입맞춤|딥키스|혀/gi, "가까이 다가와 눈을 마주치는 설레는 표정")
+        .replace(/포옹|안기다|껴안다/gi, "가까운 거리에서 다정하게 마주보는 모습")
+        .replace(/침대|침실|모텔|호텔/gi, "아늑한 방 안의 소파")
+        .replace(/교성|신음|헐떡|절정|유혹|색기|음란|야한|섹시|에로/gi, "매혹적이고 사랑스러운 눈빛과 청순한 분위기")
+        // 폭력 / 잔혹 묘사 완화
+        .replace(/토막|사지절단|내장|장기|절단/gi, "깊은 상처")
+        .replace(/피투성이|선혈|피범벅/gi, "전투의 흔적")
+        .replace(/살인|시체|주검|학살/gi, "쓰러진 적들")
         .replace(/\s+/g, " ")
         .trim();
 }
 
-// 🎨 FactChat 이미지 생성 API 호출 (안전 필터 감지 시 1회 자동 안전 재시도 탑재)
-async function requestFactChatImage(prompt, apiKey, defaultSafePrompt = "") {
+// 🛡️ 안전 필터 발동 시 캐릭터 고유의 외형/스타일/배경을 100% 보존하는 안전 대체 프롬프트 생성기
+function buildSafeCharacterPrompt(scenario, context = 'scene') {
+    const artStyle = scenario.artStyle || '수려한 일러스트 화풍';
+    const charName = scenario.title || '캐릭터';
+    const worldSetting = scenario.worldSetting || '아늑한 실내';
+    
+    // 외형에서 머리색, 헤어스타일, 눈동자, 얼굴 표현 등 고유 특징을 최대한 살리면서 민감어 2차 정제
+    let cleanAppearance = sanitizeImagePrompt(scenario.appearance || '매력적인 인물');
+    cleanAppearance = cleanAppearance
+        .replace(/체형|실루엣|옷태|몸매|몸/g, '인상')
+        .replace(/속옷|란제리|노출|사복|원피스|드레스/g, '단정하고 세련된 복장')
+        .trim();
+
+    if (scenario.mode === 'chatbot') {
+        if (context === 'portrait') {
+            return `최고 품질의 마스터피스 캐릭터 프로필 일러스트.
+화풍: ${artStyle}.
+인물 이름: ${charName}.
+인물 외형: ${cleanAppearance}, 단정하고 세련된 복장.
+구도: 얼굴과 상반신 중심의 감성적인 프로필 초상화, 맑고 생기 있는 눈동자와 매력적인 표정, 은은하고 아름다운 배경 조명.`;
+        } else {
+            return `최고 품질의 마스터피스 1:1 대화 장면 일러스트.
+화풍: ${artStyle}.
+캐릭터 이름: ${charName}.
+캐릭터 외형: ${cleanAppearance}, 단정하고 세련된 복장.
+공간 배경: ${worldSetting}.
+상황 및 연출: ${charName}이(가) 화면을 바라보며 다정하고 따뜻한 미소를 짓고 마주보는 1:1 대화 장면, 감성적인 빛과 영화 같은 색채 연출.`;
+        }
+    } else {
+        // TRPG 모드
+        if (context === 'portrait') {
+            return `최고 품질의 모험가 프로필 일러스트.
+화풍: ${artStyle}.
+주인공 이름: ${charName}.
+주인공 외형: ${cleanAppearance}, 단정한 여행자 복장.
+구도: 얼굴과 상반신 중심의 당당하고 멋진 초상화, ${worldSetting} 세계관 분위기.`;
+        } else {
+            return `최고 품질의 마스터피스 모험 일러스트.
+화풍: ${artStyle}.
+주인공 이름: ${charName}.
+주인공 외형: ${cleanAppearance}, 단정한 여행자 복장.
+배경 세계관: ${worldSetting}.
+상황 및 연출: ${charName}이(가) ${worldSetting}에서 새로운 모험의 순간을 마주하며 당당하게 서 있는 장면, 아름다운 배경과 조명.`;
+        }
+    }
+}
+
+// 🎨 FactChat 이미지 생성 API 호출 (안전 필터 감지 시 캐릭터 외형/세계관 보존 안전 재시도 탑재)
+async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "") {
     const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
     const sanitized = sanitizeImagePrompt(prompt);
     
@@ -954,10 +1013,11 @@ async function requestFactChatImage(prompt, apiKey, defaultSafePrompt = "") {
 
     let responseText = await response.text();
 
-    // 🚨 안전 필터(content_policy_violation) 감지 시 부드러운 판타지 표현으로 1회 즉시 재시도
+    // 🚨 안전 필터(content_policy_violation) 감지 시 캐릭터 고유 외형과 세계관을 100% 보존한 안전 프롬프트로 1회 즉시 재시도
     if (!response.ok && (responseText.includes("content_policy_violation") || response.status === 400)) {
-        console.warn("⚠️ [안전 필터 정책 감지] 프롬프트를 표준 판타지 화풍으로 자동 완화하여 1회 재시도합니다...");
-        const fallback = defaultSafePrompt || "수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채. 판타지 세계의 멋진 모험가가 장엄하고 아름다운 배경 속에서 활약하는 걸작 일러스트. 단정한 여행자 복장.";
+        console.warn("⚠️ [안전 필터 정책 감지] 캐릭터의 고유 외형, 화풍, 배경을 보존한 안전 프롬프트로 1회 재시도합니다...");
+        const fallback = fallbackPrompt ? sanitizeImagePrompt(fallbackPrompt) : sanitized;
+        console.log(`🎨 [캐릭터 보존 안전 재시도 전송]:\n${fallback}`);
         
         response = await fetch(SCH_GATEWAY_URL, {
             method: 'POST',
@@ -1018,8 +1078,8 @@ app.post('/api/generate-image', async (req, res) => {
         ${currentEquipString}.`;
         }
 
-        const safeDefault = `${scenario.artStyle || '수려한 일본 애니메이션 화풍'}. 판타지 세계의 모험가 '${scenario.title || '주인공'}'이(가) 펼치는 웅장하고 아름다운 모험의 순간. 단정한 여행자 복장.`;
-        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, safeDefault);
+        const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'scene');
+        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, fallbackPrompt);
 
         if (!response.ok) {
             logError('장면 삽화 생성 FactChat API 오류 (/api/generate-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
@@ -1105,8 +1165,8 @@ app.post('/api/generate-player-image', async (req, res) => {
             ${currentEquipString}.`;
         }
 
-        const safeDefault = `${scenario.artStyle || '수려한 애니메이션 스타일'}. 판타지 캐릭터 '${scenario.title || '주인공'}'의 고품질 얼굴 중심 프로필 초상화 일러스트.`;
-        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, safeDefault);
+        const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'portrait');
+        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, fallbackPrompt);
 
         if (!response.ok) {
             logError('초상화 생성 FactChat API 오류 (/api/generate-player-image)', new Error(`HTTP ${response.status}: ${responseText}`), {

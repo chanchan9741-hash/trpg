@@ -194,7 +194,7 @@ app.get('/api/gallery', async (req, res) => {
         const files = fs.readdirSync(imgDir);
         const imageFiles = files.filter(f => !f.startsWith('BG') && /\.(png|jpe?g|webp|gif)$/i.test(f));
         
-        const scenarios = await Scenario.find({}).lean().catch(() => []);
+        const scenarios = await Scenario.find({}).catch(() => []);
         const scenarioMap = {};
         scenarios.forEach(s => {
             scenarioMap[String(s._id)] = s.title;

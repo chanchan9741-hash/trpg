@@ -1013,14 +1013,14 @@ function buildSafeCharacterPrompt(scenario, context = 'scene') {
 화풍: ${artStyle}.
 인물 이름: ${charName}.
 인물 외형: ${cleanAppearance}, 단정하고 세련된 복장.
-구도: 얼굴과 상반신 중심의 감성적인 프로필 초상화, 맑고 생기 있는 눈동자와 매력적인 표정, 은은하고 아름다운 배경 조명.`;
+구도 및 거리: 과도한 얼굴 클로즈업이나 확대를 배제하고, 머리부터 허리/가슴까지 의상과 헤어가 자연스럽게 담긴 균형 잡힌 상반신 프로필(웨이스트 샷/바스트 샷), 맑고 생기 있는 눈동자와 매력적인 표정, 은은하고 아름다운 배경 공간.`;
         } else {
             return `최고 품질의 마스터피스 1:1 대화 장면 일러스트.
 화풍: ${artStyle}.
 캐릭터 이름: ${charName}.
 캐릭터 외형: ${cleanAppearance}, 단정하고 세련된 복장.
 공간 배경: ${worldSetting}.
-상황 및 연출: ${charName}이(가) 화면을 바라보며 다정하고 따뜻한 미소를 짓고 마주보는 1:1 대화 장면, 감성적인 빛과 영화 같은 색채 연출.`;
+구도 및 연출: 극단적인 얼굴 확대나 클로즈업 없이, 인물과 카메라 사이에 적당한 거리를 둔 자연스러운 미디엄 샷/카우보이 샷 구도. ${charName}이(가) 화면을 바라보며 다정하고 따뜻한 미소를 짓고 마주보는 1:1 대화 장면, 감성적인 빛과 영화 같은 색채 연출.`;
         }
     } else {
         // TRPG 모드
@@ -1029,14 +1029,14 @@ function buildSafeCharacterPrompt(scenario, context = 'scene') {
 화풍: ${artStyle}.
 주인공 이름: ${charName}.
 주인공 외형: ${cleanAppearance}, 단정한 여행자 복장.
-구도: 얼굴과 상반신 중심의 당당하고 멋진 초상화, ${worldSetting} 세계관 분위기.`;
+구도: 과도한 클로즈업 없이 머리부터 허리까지 의상 장비가 시원하게 담긴 균형 잡힌 상반신 초상화(웨이스트 샷), ${worldSetting} 세계관 분위기.`;
         } else {
             return `최고 품질의 마스터피스 모험 일러스트.
 화풍: ${artStyle}.
 주인공 이름: ${charName}.
 주인공 외형: ${cleanAppearance}, 단정한 여행자 복장.
 배경 세계관: ${worldSetting}.
-상황 및 연출: ${charName}이(가) ${worldSetting}에서 새로운 모험의 순간을 마주하며 당당하게 서 있는 장면, 아름다운 배경과 조명.`;
+구도 및 연출: 과도한 클로즈업 없이 주인공 전신 또는 상반신(카우보이 샷)과 주변 배경이 넓게 펼쳐지는 시네마틱 와이드 미디엄 샷, ${charName}이(가) ${worldSetting}에서 새로운 모험의 순간을 마주하며 당당하게 서 있는 장면, 아름다운 배경과 조명.`;
         }
     }
 }
@@ -1050,8 +1050,8 @@ async function rewritePromptSafelyWithAi(originalPrompt, isChatbotMode = true) {
         });
 
         const systemInstruction = isChatbotMode
-            ? `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 캐릭터 이름, 머리색, 눈동자, 얼굴 표현, 매력적인 분위기, 화풍, 배경 등 핵심 정체성은 100% 보존하면서, 성적 묘사/과도한 노출/수위 높은 단어(바니, 가슴, 스킨십, 침대 등)만 DALL-E 안전 정책(전체이용가)을 무조건 통과할 수 있는 고급스럽고 세련된 의상(예: 토끼귀 머리띠와 파티 드레스, 세련된 원피스)과 감성적인 1:1 대화 장면으로 자연스럽게 재작성해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`
-            : `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 주인공 이름, 외형 특징, 화풍, 세계관 배경은 100% 보존하면서, 폭력/유혈/노출 등 DALL-E 안전 정책에 걸릴 만한 표현만 단정한 여행자 복장과 당당한 모험 장면으로 자연스럽게 재작성해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`;
+            ? `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 캐릭터 이름, 머리색, 눈동자, 얼굴 표현, 매력적인 분위기, 화풍, 배경 등 핵심 정체성은 100% 보존하면서, 성적 묘사/과도한 노출/수위 높은 단어(바니, 가슴, 스킨십, 침대 등)만 DALL-E 안전 정책(전체이용가)을 무조건 통과할 수 있는 고급스럽고 세련된 의상(예: 토끼귀 머리띠와 파티 드레스, 세련된 원피스)과 감성적인 1:1 대화 장면으로 자연스럽게 재작성해줘. 구도는 얼굴 극단적 클로즈업을 엄격히 배제하고 의상 전체와 배경이 시원하게 보이는 미디엄 샷/웨이스트 샷 구도로 명시해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`
+            : `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 주인공 이름, 외형 특징, 화풍, 세계관 배경은 100% 보존하면서, 폭력/유혈/노출 등 DALL-E 안전 정책에 걸릴 만한 표현만 단정한 여행자 복장과 당당한 모험 장면으로 자연스럽게 재작성해줘. 구도는 얼굴만 확대된 클로즈업을 피하고 의상과 배경이 잘 보이는 미디엄 샷/카우보이 샷으로 지정해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`;
 
         const res = await client.chat.completions.create({
             model: "gpt-5.4-mini",
@@ -1117,8 +1117,8 @@ async function buildHordeTagsWithAi(koreanPrompt, context = 'scene') {
         baseURL: "https://factchat-cloud.mindlogic.ai/v1/gateway"
     });
     const composition = context === 'portrait'
-        ? 'upper body portrait, looking at viewer'
-        : 'scene illustration that reflects the described situation';
+        ? 'cowboy shot, medium shot, waist up, upper body, looking at viewer, balanced composition, centered'
+        : 'medium full shot, cowboy shot, wide shot, environmental background, cinematic lighting, scenic background';
 
     const res = await client.chat.completions.create({
         model: "gpt-5.4-mini",
@@ -1133,6 +1133,7 @@ Rules:
 - Never output tags that imply minors (child, loli, shota, school uniform, teen, etc.).
 - If male-oriented anime style (남성향) is indicated: include tags like "moe, bishoujo, galgame style, anime coloring, detailed vibrant eyes, soft light".
 - If female-oriented anime style (여성향/로판) is indicated: include tags like "otome style, romance fantasy, shoujo, delicate lines, elegant, beautiful aesthetic, soft pastel lighting, sparkling details".
+- Composition & Framing: Always ensure a balanced distance. Use 'cowboy shot', 'medium shot', 'waist up', or 'medium full shot'. NEVER use 'close-up', 'extreme close-up', or cropped/zoomed-in framing. The character's head, hair, full upper torso/outfit, and surrounding background must all be clearly in frame.
 - If the description says or implies the character is a minor, output exactly: REFUSE_MINOR
 - Composition: ${composition}.`
             },
@@ -1162,7 +1163,7 @@ async function requestHordeImage(koreanPrompt, context = 'scene') {
     if (tagHit) throw minorBlockedError(tagHit);
 
     const positive = `masterpiece, best quality, amazing quality, very aesthetic, absurdres, ${tags}`;
-    const negative = 'lowres, worst quality, low quality, bad anatomy, bad hands, extra fingers, blurry, jpeg artifacts, watermark, signature, text, child, loli, shota, underage, kid, toddler';
+    const negative = 'lowres, worst quality, low quality, bad anatomy, bad hands, extra fingers, blurry, jpeg artifacts, watermark, signature, text, child, loli, shota, underage, kid, toddler, close up, extreme close up, macro, cropped, face crop, out of frame, cut off, zoomed in';
     const [width, height] = context === 'portrait' ? [832, 1216] : [1216, 832];
     const apiKey = process.env.AI_HORDE_API_KEY || '0000000000';
 
@@ -1336,7 +1337,7 @@ app.post('/api/generate-image', async (req, res) => {
         캐릭터 외형: ${scenario.appearance || '매력적인 인물'}.
         성격 및 관계: ${scenario.characterInfo}, ${scenario.worldSetting}.
         최근 대화 상황: ${recentEvents}.
-        캐릭터와 마주보고 대화하거나 감정을 교류하는 매력적이고 몰입감 넘치는 1:1 대화 장면 일러스트를 아름답게 그려줘.`;
+        구도 및 카메라 거리: 극단적인 얼굴 클로즈업이나 부담스러운 확대를 엄격히 배제하고, 캐릭터와 카메라 사이에 적당한 거리를 둔 자연스러운 미디엄 샷/카우보이 샷 구도. 캐릭터의 상반신 복장과 헤어스타일, 그리고 주변 실내/배경 공간이 시원하게 보이도록 아름다운 1:1 대화 장면 일러스트를 그려줘.`;
         } else {
             richPrompt = `
         그림 스타일(화풍): ${scenario.artStyle || '수려한 애니메이션 화풍'}.
@@ -1344,7 +1345,8 @@ app.post('/api/generate-image', async (req, res) => {
         캐릭터 설정: ${scenario.characterInfo || '모험가'}
         배경 세계관: ${scenario.worldSetting || '판타지 세계'}.
         현재 모험 상황: ${recentEvents}.
-        ${currentEquipString}.`;
+        ${currentEquipString}.
+        구도 및 카메라 거리: 과도한 얼굴 클로즈업 없이, 주인공의 전신 혹은 상반신(카우보이 샷)과 주변 배경이 넓고 웅장하게 펼쳐지는 시네마틱 와이드 미디엄 샷 구도.`;
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'scene');
@@ -1420,18 +1422,20 @@ app.post('/api/generate-player-image', async (req, res) => {
             
         let imagePrompt = "";
         if (scenario.mode === 'chatbot') {
-            imagePrompt = `제타(Zeta) 스타일 매력적인 캐릭터 프로필 일러스트. AI 캐릭터 '${scenario.title}'의 상반신/얼굴 중심 고품질 초상화를 1장 그려줘.
+            imagePrompt = `제타(Zeta) 스타일 매력적인 캐릭터 프로필 일러스트.
             캐릭터 이름: ${scenario.title}
             성격 및 특징: ${scenario.characterInfo}
             외형 묘사: ${scenario.appearance || '매력적인 인물'}
             배경 분위기: ${scenario.worldSetting}
-            그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트, 걸작'}`;
+            그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트, 걸작'}
+            구도 및 카메라 거리: 얼굴만 화면에 꽉 차게 확대된 극단적인 클로즈업을 엄격히 배제하고, 머리부터 허리/가슴까지 의상과 헤어스타일, 배경이 여유롭고 조화롭게 모두 담긴 안정적인 상반신(웨이스트 샷 / 카우보이 샷) 프로필 초상화를 1장 그려줘.`;
         } else {
-            imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 
+            imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 프로필 초상화를 1장 그려줘. 
             설정: ${scenario.characterInfo}
             그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
             캐릭터 외형: ${scenario.appearance || '기본 외형'}
-            ${currentEquipString}.`;
+            ${currentEquipString}.
+            구도 및 카메라 거리: 얼굴만 확대된 클로즈업을 배제하고, 캐릭터의 머리부터 허리/의상 장비와 배경이 조화롭게 보이는 안정적인 상반신(웨이스트 샷) 구도.`;
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'portrait');

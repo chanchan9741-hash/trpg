@@ -116,7 +116,6 @@ function wrapScenario(id, data) {
         id: id,
         userId: data.userId,
         mode: data.mode || 'trpg', // 'trpg' | 'chatbot'
-        adultMode: data.adultMode === true, // 🔞 성인 일러스트 모드 (AI Horde)
         title: data.title || "",
         worldSetting: data.worldSetting || "",
         characterInfo: data.characterInfo || "",
@@ -147,7 +146,6 @@ function wrapScenario(id, data) {
                 id: this.id,
                 userId: this.userId,
                 mode: this.mode || 'trpg',
-                adultMode: this.adultMode === true,
                 title: this.title,
                 worldSetting: this.worldSetting,
                 characterInfo: this.characterInfo,
@@ -179,7 +177,6 @@ function ScenarioModel(data) {
     const defaultData = {
         userId: data.userId,
         mode: data.mode || 'trpg',
-        adultMode: data.adultMode === true,
         title: data.title || "",
         worldSetting: data.worldSetting || "",
         characterInfo: data.characterInfo || "",
@@ -212,7 +209,6 @@ function ScenarioModel(data) {
         const plainData = {
             userId: this.userId,
             mode: this.mode || 'trpg',
-            adultMode: this.adultMode === true,
             title: this.title,
             worldSetting: this.worldSetting,
             characterInfo: this.characterInfo,
@@ -324,7 +320,6 @@ ScenarioModel.updateDocument = async function(id, scenario) {
     const firestore = checkDb();
     const plainData = {
         mode: scenario.mode || 'trpg',
-        adultMode: scenario.adultMode === true,
         title: scenario.title,
         worldSetting: scenario.worldSetting,
         characterInfo: scenario.characterInfo,

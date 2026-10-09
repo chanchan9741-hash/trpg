@@ -192,8 +192,7 @@ app.get('/api/gallery', async (req, res) => {
         if (!fs.existsSync(imgDir)) return res.json([]);
         
         const files = fs.readdirSync(imgDir);
-        // 🔞 성인 일러스트(nsfw_ 접두사)는 공개 갤러리에서 제외
-        const imageFiles = files.filter(f => !f.startsWith('BG') && !f.startsWith('nsfw_') && /\.(png|jpe?g|webp|gif)$/i.test(f));
+        const imageFiles = files.filter(f => !f.startsWith('BG') && /\.(png|jpe?g|webp|gif)$/i.test(f));
         
         const scenarios = await Scenario.find({}).catch(() => []);
         const scenarioMap = {};
@@ -204,7 +203,7 @@ app.get('/api/gallery', async (req, res) => {
         const list = imageFiles.map(filename => {
             const stat = fs.statSync(path.join(imgDir, filename));
             let title = filename;
-            const match = filename.match(/^(portrait|scene)_([^_]+)/);
+            const match = filename.match(/^(?:nsfw_)?(portrait|scene)_([^_]+)/);
             if (match && match[2] && scenarioMap[match[2]]) {
                 const typeText = match[1] === 'portrait' ? '프로필 일러스트' : '대화 장면 삽화';
                 title = `[${scenarioMap[match[2]]}] ${typeText}`;
@@ -291,7 +290,6 @@ app.post('/api/scenarios', async (req, res) => {
         const newScenario = new Scenario({
             userId: req.user._id,
             mode: req.body.mode || 'trpg', // 'trpg' | 'chatbot'
-            adultMode: req.body.adultMode === true,
             title: req.body.title,
             worldSetting: req.body.worldSetting,
             characterInfo: req.body.characterInfo,
@@ -876,11 +874,10 @@ app.put('/api/scenarios/:id', async (req, res) => {
         if (!req.user) return res.status(401).send("Unauthorized");
 
         // 프론트엔드에서 보낸 수정 데이터를 받습니다.
-        const { title, worldSetting, characterInfo, appearance, artStyle, mode, adultMode } = req.body;
+        const { title, worldSetting, characterInfo, appearance, artStyle, mode } = req.body;
         
         const updateData = { title, worldSetting, characterInfo, appearance, artStyle };
         if (mode) updateData.mode = mode;
-        if (typeof adultMode === 'boolean') updateData.adultMode = adultMode;
 
         // 데이터베이스에서 해당 ID를 찾아서 덮어씌웁니다. (본인 시나리오만 수정 가능)
         const updatedScenario = await Scenario.findOneAndUpdate(
@@ -1074,78 +1071,15 @@ async function rewritePromptSafelyWithAi(originalPrompt, isChatbotMode = true) {
     }
 }
 
-// 🎨 다단계 지능형 이미지 생성 엔진
-// 1차: 사용자 원본 프롬프트로 FactChat 플래그십 전송 (검열 통과 시 즉시 완료)
-// 2차: 검열(400 content_policy_violation) 발생 시 (이때 FactChat 크레딧 차감 0원!)
-//      -> gpt-5.4-mini가 캐릭터 고유 특성(이름, 외형, 의상, 성격)을 100% 보존하며 안전 정제 후 FactChat 재전송!
-async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatbotMode = true) {
-    const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
-    const rawPrompt = cleanPromptFormat(prompt);
-    
-    console.log(`🎨 [1차 FactChat 원본 생성 시도]:\n${rawPrompt}`);
-
-    let response = await fetch(SCH_GATEWAY_URL, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
-            "prompt": rawPrompt,
-            "size": "1024x1024",
-            "response_format": "url"
-        })
-    });
-
-    let responseText = await response.text();
-
-    // 1차 FactChat 성공 시 즉시 반환
-    if (response.ok) {
-        return { response, responseText };
-    }
-
-    // 🚨 1차 FactChat에서 안전 정책(content_policy_violation) 감지된 경우! (이때 FactChat 크레딧은 0원 차감)
-    if (responseText.includes("content_policy_violation") || response.status === 400) {
-        console.warn("⚠️ [1차 FactChat 검열 감지 (크레딧 미차감)] AI(gpt-5.4-mini)로 캐릭터 특성을 보존하여 안전하게 프롬프트 재작성 중...");
-        
-        let safePrompt = await rewritePromptSafelyWithAi(rawPrompt, isChatbotMode);
-        if (safePrompt) {
-            console.log(`🤖 [2차 AI 지능형 안전 재작성 프롬프트]:\n${safePrompt}`);
-        } else {
-            safePrompt = fallbackPrompt ? cleanPromptFormat(fallbackPrompt) : sanitizeImagePrompt(rawPrompt);
-            console.log(`🎨 [2차 기본 안전 템플릿 프롬프트]:\n${safePrompt}`);
-        }
-        
-        response = await fetch(SCH_GATEWAY_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                "model": "gpt-image-2.5-sunburst",
-                "prompt": safePrompt,
-                "size": "1024x1024",
-                "response_format": "url"
-            })
-        });
-        responseText = await response.text();
-    }
-
-    return { response, responseText };
-}
-
 // =====================================================================
-// 🔞 AI Horde 성인 일러스트 엔진 (무료 크라우드소싱 Stable Diffusion 네트워크)
-// - 시나리오의 adultMode가 켜져 있을 때만 사용
-// - AI_HORDE_API_KEY(무료 가입 키)가 없으면 익명 키(대기열 최하위)로 동작
-// - 미성년자 연상 설정은 무조건 차단 (원문 + 변환된 태그 이중 검사)
+// 🌸 AI Horde 일러스트 엔진 (무료 크라우드소싱 SDXL 네트워크)
+// - 1차 FactChat 검열(400) 감지 시 2차 엔진으로 자동 전환되어 원본 의도대로 생성
+// - 미성년자 연상 설정은 무조건 차단 (원문 + 변환된 Danbooru 태그 이중 검사)
 // =====================================================================
 const HORDE_API = 'https://aihorde.net/api/v2';
 const HORDE_MODELS = (process.env.AI_HORDE_MODELS || 'WAI-NSFW-illustrious-SDXL,Nova Anime XL')
     .split(',').map(s => s.trim()).filter(Boolean);
-const HORDE_TIMEOUT_MS = Number(process.env.AI_HORDE_TIMEOUT_MS) || 6 * 60 * 1000;
+const HORDE_TIMEOUT_MS = Number(process.env.AI_HORDE_TIMEOUT_MS) || 120 * 1000;
 const HORDE_CLIENT_AGENT = 'trpg-chatbot:1.0:github.com/chanchan9741-hash/trpg';
 
 const MINOR_PATTERNS = [
@@ -1156,7 +1090,6 @@ const MINOR_PATTERNS = [
     /\btoddler|\binfant|\bteens?\b|\bteenager/i
 ];
 
-// 미성년자를 연상시키는 표현이 있으면 해당 단어를, 없으면 null을 반환
 function detectMinorContent(text) {
     if (!text) return null;
     for (const re of MINOR_PATTERNS) {
@@ -1172,7 +1105,7 @@ function detectMinorContent(text) {
 }
 
 function minorBlockedError(hit) {
-    const err = new Error(`성인 모드에서는 미성년자를 연상시키는 설정("${hit}")이 포함된 이미지를 생성할 수 없습니다. 캐릭터 설정을 성인으로 수정해 주세요.`);
+    const err = new Error(`미성년자를 연상시키는 설정("${hit}")이 포함된 이미지는 생성할 수 없습니다. 설정을 성인으로 수정해 주세요.`);
     err.code = 'MINOR_BLOCKED';
     return err;
 }
@@ -1232,7 +1165,7 @@ async function requestHordeImage(koreanPrompt, context = 'scene') {
     const [width, height] = context === 'portrait' ? [832, 1216] : [1216, 832];
     const apiKey = process.env.AI_HORDE_API_KEY || '0000000000';
 
-    console.log(`🔞 [AI Horde 성인 일러스트 요청] 모델: ${HORDE_MODELS.join(' / ')} | 키: ${process.env.AI_HORDE_API_KEY ? '가입 키' : '익명'}\n🏷️ 태그: ${tags}`);
+    console.log(`🌸 [2차 AI Horde 생성 요청] 모델: ${HORDE_MODELS.join(' / ')} | 키: ${process.env.AI_HORDE_API_KEY ? '가입 키' : '익명'}\n🏷️ Danbooru 태그: ${tags}`);
 
     // 3) 비동기 생성 요청
     const submitRes = await fetch(`${HORDE_API}/generate/async`, {
@@ -1293,6 +1226,86 @@ async function requestHordeImage(koreanPrompt, context = 'scene') {
     return { dataUrl, model: gen.model, tags };
 }
 
+// 🎨 다단계 지능형 이미지 생성 엔진
+// 1차: 순천향대 FactChat 플래그십 (사용자 원본 프롬프트 그대로 전송)
+// 2차: FactChat 검열(400 content_policy_violation) 감지 시 -> 검열 없는 AI Horde(SDXL)로 원본 의도대로 생성! (FactChat 크레딧 미소모)
+// 3차: AI Horde 실패/타임아웃 시 -> AI(gpt-5.4-mini)로 프롬프트 안전 정제 후 FactChat 재전송 (최종 백업)
+async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatbotMode = true, context = 'scene') {
+    const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
+    const rawPrompt = cleanPromptFormat(prompt);
+    
+    console.log(`🎨 [1차 FactChat 원본 생성 시도]:\n${rawPrompt}`);
+
+    let response = await fetch(SCH_GATEWAY_URL, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
+            "prompt": rawPrompt,
+            "size": "1024x1024",
+            "response_format": "url"
+        })
+    });
+
+    let responseText = await response.text();
+
+    // 1차 FactChat 성공 시 즉시 반환
+    if (response.ok) {
+        return { response, responseText };
+    }
+
+    // 🚨 1차 FactChat에서 안전 정책(content_policy_violation) 감지된 경우! (이때 FactChat 크레딧은 0원 차감)
+    if (responseText.includes("content_policy_violation") || response.status === 400) {
+        console.warn("⚠️ [1차 FactChat 검열 감지 (크레딧 0 소모)] 2차: 검열 없는 오픈소스 AI Horde(SDXL)로 원래 의도대로 생성 시도 중...");
+        
+        // 🌸 2차 시도: AI Horde (검열 없는 무료 SDXL 네트워크)
+        try {
+            const horde = await requestHordeImage(rawPrompt, context);
+            if (horde && horde.dataUrl) {
+                console.log(`✨ [2차 AI Horde 생성 성공!] 모델: ${horde.model} (검열 없이 원본 의도대로 생성 완료)`);
+                return {
+                    response: { ok: true, status: 200 },
+                    responseText: JSON.stringify({
+                        data: [{ b64_json: horde.dataUrl }]
+                    })
+                };
+            }
+        } catch (hordeErr) {
+            console.warn(`⚠️ [2차 AI Horde 실패/타임아웃]: ${hordeErr.message}`);
+        }
+
+        // 🤖 3차 시도: AI Horde 실패/타임아웃 시, 그때 비로소 AI(gpt-5.4-mini)로 프롬프트 안전 완화 후 FactChat 재시도!
+        console.warn("⚠️ [2차 AI Horde 실패/타임아웃] 3차: AI(gpt-5.4-mini)로 프롬프트를 안전하게 완화하여 FactChat에 재전송합니다...");
+        let safePrompt = await rewritePromptSafelyWithAi(rawPrompt, isChatbotMode);
+        if (safePrompt) {
+            console.log(`🤖 [3차 AI 지능형 안전 재작성 프롬프트]:\n${safePrompt}`);
+        } else {
+            safePrompt = fallbackPrompt ? cleanPromptFormat(fallbackPrompt) : sanitizeImagePrompt(rawPrompt);
+            console.log(`🎨 [3차 기본 안전 템플릿 프롬프트]:\n${safePrompt}`);
+        }
+        
+        response = await fetch(SCH_GATEWAY_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "model": "gpt-image-2.5-sunburst",
+                "prompt": safePrompt,
+                "size": "1024x1024",
+                "response_format": "url"
+            })
+        });
+        responseText = await response.text();
+    }
+
+    return { response, responseText };
+}
+
 app.post('/api/generate-image', async (req, res) => {
     try {
         const { scenarioId } = req.body;
@@ -1333,21 +1346,8 @@ app.post('/api/generate-image', async (req, res) => {
         ${currentEquipString}.`;
         }
 
-        // 🔞 성인 일러스트 모드: AI Horde로 생성 (실패 시 아래 FactChat 일반 경로로 대체)
-        if (scenario.adultMode) {
-            try {
-                const horde = await requestHordeImage(richPrompt, 'scene');
-                const savedUrl = await saveBase64Image(horde.dataUrl, `nsfw_scene_${scenarioId}`);
-                console.log("✅ [성인 모드] 장면 삽화 저장 완료! 경로:", savedUrl);
-                return res.json({ imageUrl: savedUrl, engine: 'ai-horde' });
-            } catch (hordeErr) {
-                if (hordeErr.code === 'MINOR_BLOCKED') return res.status(400).json({ error: hordeErr.message });
-                logError('AI Horde 장면 삽화 실패 → FactChat 일반 모드로 대체', hordeErr, { scenarioId });
-            }
-        }
-
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'scene');
-        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot');
+        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot', 'scene');
 
         if (!response.ok) {
             logError('장면 삽화 생성 FactChat API 오류 (/api/generate-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
@@ -1433,23 +1433,8 @@ app.post('/api/generate-player-image', async (req, res) => {
             ${currentEquipString}.`;
         }
 
-        // 🔞 성인 일러스트 모드: AI Horde로 프로필 생성 (실패 시 아래 FactChat 일반 경로로 대체)
-        if (scenario.adultMode) {
-            try {
-                const horde = await requestHordeImage(imagePrompt, 'portrait');
-                const savedUrl = await saveBase64Image(horde.dataUrl, `nsfw_portrait_${scenarioId}`);
-                scenario.playerImageUrl = savedUrl;
-                await scenario.save();
-                console.log("✅ [성인 모드] 프로필 일러스트 저장 완료! 경로:", savedUrl);
-                return res.json({ playerImageUrl: savedUrl, engine: 'ai-horde' });
-            } catch (hordeErr) {
-                if (hordeErr.code === 'MINOR_BLOCKED') return res.status(400).json({ error: hordeErr.message });
-                logError('AI Horde 프로필 생성 실패 → FactChat 일반 모드로 대체', hordeErr, { scenarioId });
-            }
-        }
-
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'portrait');
-        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot');
+        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot', 'portrait');
 
         if (!response.ok) {
             logError('초상화 생성 FactChat API 오류 (/api/generate-player-image)', new Error(`HTTP ${response.status}: ${responseText}`), {

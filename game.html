@@ -581,10 +581,7 @@ function updateEnemyUI(enemyData) {
     // 🎨 사진 생성 (액자 클릭 시 실행)
     async function generatePlayerImage() {
         if (!scenarioId) return;
-        const isAdult = window.scenarioAdultMode;
-        const confirmMsg = isAdult 
-            ? "주인공 설정을 바탕으로 🔞 AI Horde(검열 없음) 초상화를 그려낼까요?\n(대기열 상황에 따라 20~60초 정도 소요될 수 있습니다)"
-            : "주인공 설정을 바탕으로 초상화를 그려낼까요?";
+        const confirmMsg = "주인공 설정을 바탕으로 초상화를 그려낼까요?";
         if (!confirm(confirmMsg)) return;
 
         const loader = document.getElementById('profile-loading');
@@ -1057,7 +1054,6 @@ async function handleDrop(event, part) {
             }
 
             scenarioMode = 'trpg';
-            window.scenarioAdultMode = data.adultMode === true;
             if (data.title) {
                 document.getElementById('player-name').innerText = data.title;
             }
@@ -1072,9 +1068,7 @@ async function handleDrop(event, part) {
                 badge.style.background = 'var(--surface-2)';
                 badge.style.color = 'var(--text-primary)';
                 badge.style.border = '1px solid var(--border-strong)';
-                badge.innerHTML = data.adultMode 
-                    ? '<i class="bi bi-shield-shaded"></i> TRPG 모드 <span style="color:#ff477e; margin-left:4px; font-weight:bold;">(🔞성인)</span>'
-                    : '<i class="bi bi-shield-shaded"></i> TRPG 모드';
+                badge.innerHTML = '<i class="bi bi-shield-shaded"></i> TRPG 모드';
             }
 
             const trpgSection = document.getElementById('trpg-status-section');
@@ -1288,16 +1282,11 @@ async function handleDrop(event, part) {
     }
 
     async function generateImage() {
-        const isAdult = window.scenarioAdultMode;
         if (!currentEvents || currentEvents.length === 0) {
-            const promptMsg = isAdult
-                ? "아직 모험 일지에 주요 사건이 기록되지 않았습니다. 🔞 AI Horde(검열 없음)로 일러스트를 그릴까요? (20~60초)"
-                : "아직 모험 일지에 주요 사건이 기록되지 않았습니다. 현재 장면을 상상해 일러스트를 그릴까요?";
+            const promptMsg = "아직 모험 일지에 주요 사건이 기록되지 않았습니다. 현재 장면을 상상해 일러스트를 그릴까요?";
             if (!confirm(promptMsg)) return;
         } else {
-            const promptMsg = isAdult
-                ? "현재 모험 상황을 바탕으로 🔞 AI Horde(검열 없음) 장면 일러스트를 생성할까요? (20~60초)"
-                : "현재 모험 상황을 바탕으로 장면 일러스트를 생성할까요?";
+            const promptMsg = "현재 모험 상황을 바탕으로 장면 일러스트를 생성할까요?";
             if (!confirm(promptMsg)) return;
         }
         showLoading(); 

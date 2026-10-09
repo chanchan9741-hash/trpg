@@ -612,10 +612,7 @@
                 document.title = `${characterName} - 인물 챗봇`;
 
                 document.getElementById('char-name').innerText = characterName;
-                const adultBadge = characterData.adultMode 
-                    ? ` <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 60, 100, 0.15); color: #ff477e; border: 1px solid rgba(255, 60, 100, 0.35); padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; vertical-align: middle;"><i class="bi bi-shield-slash"></i> 🔞 성인 모드</span>`
-                    : '';
-                document.getElementById('chat-header-title').innerHTML = `<i class="bi bi-chat-heart-fill" style="color: #FF5A79;"></i> ${characterName}과의 1:1 대화${adultBadge}`;
+                document.getElementById('chat-header-title').innerHTML = `<i class="bi bi-chat-heart-fill" style="color: #FF5A79;"></i> ${characterName}과의 1:1 대화`;
                 userInput.placeholder = `${characterName}에게 메시지 보내기...`;
 
                 document.getElementById('char-personality').innerText = characterData.characterInfo || "설정 없음";
@@ -792,10 +789,7 @@
 
         // 5. 프로필 이미지 생성
         async function generateProfileImage() {
-            const isAdult = characterData && characterData.adultMode;
-            const confirmMsg = isAdult 
-                ? `'${characterName}'의 프로필 일러스트를 🔞 AI Horde(검열 없음)로 새로 그릴까요?\n(대기열 상황에 따라 20~60초 정도 소요될 수 있습니다)`
-                : `'${characterName}'의 캐릭터 프로필 일러스트를 AI로 새로 그릴까요?`;
+            const confirmMsg = `'${characterName}'의 캐릭터 프로필 일러스트를 AI로 새로 그릴까요?`;
             if (!confirm(confirmMsg)) return;
 
             const overlay = document.getElementById('avatar-loading');
@@ -828,13 +822,10 @@
 
         // 6. 대화 장면 삽화 생성
         async function generateSceneImage() {
-            const isAdult = characterData && characterData.adultMode;
-            const confirmMsg = isAdult
-                ? `'${characterName}'과의 현재 대화 장면 일러스트를 🔞 AI Horde(검열 없음)로 그릴까요?\n(대기열 상황에 따라 20~60초 정도 소요될 수 있습니다)`
-                : `'${characterName}'과의 현재 대화 장면 일러스트를 그릴까요?`;
+            const confirmMsg = `'${characterName}'과의 현재 대화 장면 일러스트를 그릴까요?`;
             if (!confirm(confirmMsg)) return;
 
-            showTypingLoading(isAdult ? "🔞 AI Horde로 검열 없는 삽화를 생성하는 중입니다 (20~60초)..." : undefined);
+            showTypingLoading("🎨 일러스트를 생성하는 중입니다...");
             try {
                 const response = await fetch('/api/generate-image', {
                     method: 'POST',

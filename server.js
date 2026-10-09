@@ -65,8 +65,8 @@ process.on('warning', (warning) => {
 });
 
 // 3. 구글 클라우드(Firestore) 영구 저장 헬퍼 함수
-async function saveBase64Image(base64String, prefix = 'img') {
-    return await saveCloudImage(base64String, prefix);
+async function saveBase64Image(base64String, prefix = 'img', scenarioId = null) {
+    return await saveCloudImage(base64String, prefix, scenarioId);
 }
 
 // 4. 미들웨어 설정
@@ -74,32 +74,78 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public')); 
 
-// 🖼️ 구글 클라우드 영구 이미지 서빙 라우트 (로컬 디스크 캐시 확인 후 없을 시 Firestore 클라우드에서 복원)
-app.get('/image/:filename', async (req, res) => {
-    const filename = req.params.filename;
-    const localPath = path.join(__dirname, 'public', 'image', filename);
+// 🖼️ 구글 클라우드 영구 이미지 서빙 라우트 (시나리오별 하위 폴더 및 레거시 단일 폴더 지원, 로컬 캐시 부재 시 Firestore 클라우드에서 복원)
+app.get(['/image/:param1/:param2', '/image/:param1'], async (req, res) => {
+    const param1 = req.params.param1;
+    const param2 = req.params.param2;
+
+    let scenarioId = null;
+    let filename = null;
+
+    if (param2) {
+        scenarioId = param1;
+        filename = param2;
+    } else {
+        filename = param1;
+    }
+
+    // 1. 직접 로컬 경로 확인
+    let localPath = scenarioId
+        ? path.join(__dirname, 'public', 'image', scenarioId, filename)
+        : path.join(__dirname, 'public', 'image', filename);
 
     if (fs.existsSync(localPath)) {
         return res.sendFile(localPath);
     }
 
+    // 2. 만약 scenarioId 없이 (/image/filename) 요청되었는데 서브폴더(시나리오 폴더)에 존재하는 경우 검색 (하위 호환성)
+    if (!scenarioId) {
+        // 2-1. 파일명에서 scenarioId 추출 시도 (portrait_<scenarioId>_... 또는 scene_<scenarioId>_...)
+        const match = filename.match(/^(?:nsfw_)?(?:portrait|scene|chat)_([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+            const subPath = path.join(__dirname, 'public', 'image', match[1], filename);
+            if (fs.existsSync(subPath)) {
+                return res.sendFile(subPath);
+            }
+        }
+
+        // 2-2. 모든 서브폴더를 순회하여 해당 파일이 있는지 탐색
+        const baseDir = path.join(__dirname, 'public', 'image');
+        if (fs.existsSync(baseDir)) {
+            const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isDirectory()) {
+                    const candidate = path.join(baseDir, entry.name, filename);
+                    if (fs.existsSync(candidate)) {
+                        return res.sendFile(candidate);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 로컬에 없으면 Firestore 클라우드에서 복원 시도
     try {
-        const cloudImg = await getCloudImage(filename);
+        const cloudImg = await getCloudImage(scenarioId ? `${scenarioId}/${filename}` : filename);
         if (!cloudImg) {
             return res.status(404).send("이미지를 찾을 수 없습니다.");
         }
 
+        const targetScenario = scenarioId || cloudImg.scenarioId;
+        const cacheDir = targetScenario
+            ? path.join(__dirname, 'public', 'image', targetScenario)
+            : path.join(__dirname, 'public', 'image');
+
         try {
-            const cacheDir = path.join(__dirname, 'public', 'image');
             if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-            fs.writeFileSync(localPath, cloudImg.buffer);
+            fs.writeFileSync(path.join(cacheDir, filename), cloudImg.buffer);
         } catch (_) {}
 
         res.set('Content-Type', cloudImg.contentType);
         res.set('Cache-Control', 'public, max-age=31536000'); // 브라우저 캐시 1년
         return res.send(cloudImg.buffer);
     } catch (err) {
-        logError('이미지 서빙 오류 (/image/' + filename + ')', err);
+        logError('이미지 서빙 오류 (/image/' + (param2 ? `${param1}/${param2}` : param1) + ')', err);
         return res.status(500).send("이미지 로드 실패");
     }
 }); 
@@ -185,39 +231,73 @@ app.get('/game/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 
 app.get('/chat/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'chat.html')) : res.redirect('/auth/google'));
 app.get('/gallery', (req, res) => res.sendFile(path.join(__dirname, 'gallery.html')));
 
-// 🖼️ 갤러리 이미지 목록 API
+// 🖼️ 갤러리 이미지 목록 API (시나리오별 하위 디렉터리 완벽 탐색 및 시나리오 메타데이터 연결)
 app.get('/api/gallery', async (req, res) => {
     try {
         const imgDir = path.join(__dirname, 'public', 'image');
         if (!fs.existsSync(imgDir)) return res.json([]);
         
-        const files = fs.readdirSync(imgDir);
-        const imageFiles = files.filter(f => !f.startsWith('BG') && /\.(png|jpe?g|webp|gif)$/i.test(f));
-        
         const scenarios = await Scenario.find({}).catch(() => []);
         const scenarioMap = {};
         scenarios.forEach(s => {
-            scenarioMap[String(s._id)] = s.title;
+            const sid = String(s.id || s._id);
+            scenarioMap[sid] = s.title;
         });
 
-        const list = imageFiles.map(filename => {
-            const stat = fs.statSync(path.join(imgDir, filename));
-            let title = filename;
-            const match = filename.match(/^(?:nsfw_)?(portrait|scene)_([^_]+)/);
-            if (match && match[2] && scenarioMap[match[2]]) {
-                const typeText = match[1] === 'portrait' ? '프로필 일러스트' : '대화 장면 삽화';
-                title = `[${scenarioMap[match[2]]}] ${typeText}`;
+        const list = [];
+
+        function processFile(fullPath, filename, folderScenarioId = null) {
+            if (filename.startsWith('BG') || !/\.(png|jpe?g|webp|gif)$/i.test(filename)) return;
+            try {
+                const stat = fs.statSync(fullPath);
+                let detectedScenarioId = folderScenarioId;
+                if (!detectedScenarioId) {
+                    const match = filename.match(/^(?:nsfw_)?(?:portrait|scene|chat)_([^_]+)/);
+                    if (match && match[1]) {
+                        detectedScenarioId = match[1];
+                    }
+                }
+
+                const scenarioTitle = (detectedScenarioId && scenarioMap[detectedScenarioId]) 
+                    ? scenarioMap[detectedScenarioId] 
+                    : (detectedScenarioId ? '이전 시나리오' : '공용 / 기타');
+
+                let typeText = '이미지';
+                if (filename.startsWith('portrait') || filename.includes('_portrait_')) typeText = '프로필 일러스트';
+                else if (filename.startsWith('scene') || filename.includes('_scene_')) typeText = '장면 삽화';
+                else if (filename.startsWith('chat') || filename.includes('_chat_')) typeText = '대화 이미지';
+
+                const url = folderScenarioId ? `/image/${folderScenarioId}/${filename}` : `/image/${filename}`;
+
+                list.push({
+                    filename,
+                    url,
+                    scenarioId: detectedScenarioId || 'etc',
+                    scenarioTitle,
+                    title: `[${scenarioTitle}] ${typeText}`,
+                    type: typeText,
+                    sizeKb: Math.round(stat.size / 1024),
+                    createdAt: stat.mtime
+                });
+            } catch (_) {}
+        }
+
+        const entries = fs.readdirSync(imgDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isFile()) {
+                processFile(path.join(imgDir, entry.name), entry.name, null);
+            } else if (entry.isDirectory()) {
+                const subDir = path.join(imgDir, entry.name);
+                const subEntries = fs.readdirSync(subDir, { withFileTypes: true });
+                for (const subEntry of subEntries) {
+                    if (subEntry.isFile()) {
+                        processFile(path.join(subDir, subEntry.name), subEntry.name, entry.name);
+                    }
+                }
             }
+        }
 
-            return {
-                filename,
-                url: `/image/${filename}`,
-                title,
-                sizeKb: Math.round(stat.size / 1024),
-                createdAt: stat.mtime
-            };
-        }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
+        list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         res.json(list);
     } catch (err) {
         logError('갤러리 목록 조회 (/api/gallery)', err);
@@ -913,8 +993,19 @@ app.delete('/api/scenarios/:id', async (req, res) => {
 
         if (!deletedScenario) return res.status(404).send("삭제 권한이 없습니다.");
 
-        // 2. 연결된 메시지들도 삭제
+        // 2. 연결된 메시지들도 삭제 (서브컬렉션 및 레거시 메시지 일괄 정리)
         await Message.deleteMany({ scenarioId: scenarioId });
+
+        // 3. 해당 시나리오 전용 이미지 디렉터리 정리
+        try {
+            const scenarioImgDir = path.join(__dirname, 'public', 'image', scenarioId);
+            if (fs.existsSync(scenarioImgDir)) {
+                fs.rmSync(scenarioImgDir, { recursive: true, force: true });
+                console.log(`🗑️ 시나리오(${scenarioId}) 이미지 폴더 삭제 완료`);
+            }
+        } catch (dirErr) {
+            console.warn("⚠️ 시나리오 이미지 폴더 정리 중 경고:", dirErr.message);
+        }
 
         res.status(200).send("삭제 성공");
     } catch (error) {
@@ -1372,7 +1463,7 @@ app.post('/api/generate-image', async (req, res) => {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            const savedUrl = await saveBase64Image(extractedImage, `scene_${scenarioId}`);
+            const savedUrl = await saveBase64Image(extractedImage, 'scene', scenarioId);
             console.log("✅ 이미지 생성 및 저장 완료! 경로:", savedUrl);
             res.json({ imageUrl: savedUrl });
         } else {
@@ -1390,7 +1481,7 @@ app.post('/api/chat/save-image', async (req, res) => {
     try {
         let { scenarioId, role, content } = req.body;
         if (content && typeof content === 'string' && content.startsWith('data:image')) {
-            content = await saveBase64Image(content, `chat_${scenarioId}`);
+            content = await saveBase64Image(content, 'chat', scenarioId);
         }
         await Message.create({
             scenarioId,
@@ -1463,7 +1554,7 @@ app.post('/api/generate-player-image', async (req, res) => {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            const savedUrl = await saveBase64Image(extractedImage, `portrait_${scenarioId}`);
+            const savedUrl = await saveBase64Image(extractedImage, 'portrait', scenarioId);
             scenario.playerImageUrl = savedUrl;
             await scenario.save();
 
@@ -1559,6 +1650,39 @@ app.use((err, req, res, next) => {
         res.status(500).json({ error: err.message || "서버 내부 오류가 발생했습니다." });
     }
 });
+
+// 📁 기존 루트 이미지 파일들을 시나리오별 폴더로 자동 정리(마이그레이션)
+function migrateLegacyImages() {
+    try {
+        const imgDir = path.join(__dirname, 'public', 'image');
+        if (!fs.existsSync(imgDir)) return;
+        const entries = fs.readdirSync(imgDir, { withFileTypes: true });
+        let movedCount = 0;
+        for (const entry of entries) {
+            if (!entry.isFile()) continue;
+            const filename = entry.name;
+            if (filename.startsWith('BG')) continue;
+            const match = filename.match(/^(?:nsfw_)?(?:portrait|scene|chat)_([^_]+)/);
+            if (match && match[1]) {
+                const scenarioId = match[1];
+                const targetDir = path.join(imgDir, scenarioId);
+                if (!fs.existsSync(targetDir)) {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                }
+                const oldPath = path.join(imgDir, filename);
+                const newPath = path.join(targetDir, filename);
+                fs.renameSync(oldPath, newPath);
+                movedCount++;
+            }
+        }
+        if (movedCount > 0) {
+            console.log(`📁 [이미지 폴더 정리 완료] 기존 ${movedCount}개 이미지를 시나리오별 폴더로 이동했습니다.`);
+        }
+    } catch (err) {
+        console.warn("⚠️ [이미지 폴더 정리 경고]", err.message);
+    }
+}
+migrateLegacyImages();
 
 // 9. 서버 실행
 const PORT = process.env.PORT || 8080;

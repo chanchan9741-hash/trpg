@@ -202,9 +202,6 @@ function ScenarioModel(data) {
     Object.assign(this, wrapScenario(null, defaultData));
 
     this.save = async function() {
-        if (this.playerImageUrl && this.playerImageUrl.startsWith('data:image')) {
-            this.playerImageUrl = await saveCloudImage(this.playerImageUrl, `portrait_${this.userId || 'user'}`);
-        }
         const firestore = checkDb();
         const plainData = {
             userId: this.userId,
@@ -234,6 +231,10 @@ function ScenarioModel(data) {
         const ref = await firestore.collection('scenarios').add(plainData);
         this._id = ref.id;
         this.id = ref.id;
+        if (this.playerImageUrl && this.playerImageUrl.startsWith('data:image')) {
+            this.playerImageUrl = await saveCloudImage(this.playerImageUrl, 'portrait', ref.id);
+            await ref.update({ playerImageUrl: this.playerImageUrl });
+        }
         return this;
     };
 }
@@ -315,7 +316,7 @@ ScenarioModel.findById = async function(id) {
 
 ScenarioModel.updateDocument = async function(id, scenario) {
     if (scenario.playerImageUrl && scenario.playerImageUrl.startsWith('data:image')) {
-        scenario.playerImageUrl = await saveCloudImage(scenario.playerImageUrl, `portrait_${id}`);
+        scenario.playerImageUrl = await saveCloudImage(scenario.playerImageUrl, 'portrait', id);
     }
     const firestore = checkDb();
     const plainData = {
@@ -399,35 +400,55 @@ ScenarioModel.findOneAndDelete = async function(filter) {
     return wrapScenario(doc.id, data);
 };
 
-// 4. Message 모델
+// 4. Message 모델 (시나리오별 독립 서브컬렉션: scenarios/{scenarioId}/messages)
 const Message = {
     find(query) {
         return new FirestoreQuery(async () => {
             const firestore = checkDb();
-            let ref = firestore.collection('messages');
+            let docs = [];
+
+            // 1) 시나리오별 서브컬렉션에서 먼저 조회
             if (query && query.scenarioId) {
-                ref = ref.where('scenarioId', '==', query.scenarioId);
+                const subSnap = await firestore.collection('scenarios').doc(query.scenarioId).collection('messages').get();
+                if (!subSnap.empty) {
+                    docs = subSnap.docs.map(doc => ({
+                        _id: doc.id,
+                        id: doc.id,
+                        ...doc.data(),
+                        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : (doc.data().createdAt ? new Date(doc.data().createdAt) : new Date())
+                    }));
+                }
             }
-            const snap = await ref.get();
-            return snap.docs.map(doc => {
-                const data = doc.data();
-                return {
+
+            // 2) 만약 서브컬렉션에 없으면 기존 레거시 messages 컬렉션에서 조회 (하위 호환성 100%)
+            if (docs.length === 0) {
+                let ref = firestore.collection('messages');
+                if (query && query.scenarioId) {
+                    ref = ref.where('scenarioId', '==', query.scenarioId);
+                }
+                const snap = await ref.get();
+                docs = snap.docs.map(doc => ({
                     _id: doc.id,
                     id: doc.id,
-                    ...data,
-                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
-                };
-            });
+                    ...doc.data(),
+                    createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : (doc.data().createdAt ? new Date(doc.data().createdAt) : new Date())
+                }));
+            }
+
+            return docs;
         });
     },
 
     async countDocuments(query) {
         const firestore = checkDb();
-        let ref = firestore.collection('messages');
         if (query && query.scenarioId) {
-            ref = ref.where('scenarioId', '==', query.scenarioId);
+            const subSnap = await firestore.collection('scenarios').doc(query.scenarioId).collection('messages').get();
+            if (!subSnap.empty) return subSnap.size;
+
+            const legacySnap = await firestore.collection('messages').where('scenarioId', '==', query.scenarioId).get();
+            return legacySnap.size;
         }
-        const snap = await ref.get();
+        const snap = await firestore.collection('messages').get();
         return snap.size;
     },
 
@@ -439,26 +460,45 @@ const Message = {
             content: data.content,
             createdAt: new Date()
         };
-        const ref = await firestore.collection('messages').add(messageData);
+
+        let ref;
+        if (data.scenarioId) {
+            // 시나리오 하위 messages 서브컬렉션에 그룹화하여 저장
+            ref = await firestore.collection('scenarios').doc(data.scenarioId).collection('messages').add(messageData);
+        } else {
+            ref = await firestore.collection('messages').add(messageData);
+        }
         return { _id: ref.id, id: ref.id, ...messageData };
     },
 
     async deleteMany(query) {
         const firestore = checkDb();
-        let ref = firestore.collection('messages');
+        let deletedCount = 0;
         if (query && query.scenarioId) {
-            ref = ref.where('scenarioId', '==', query.scenarioId);
+            // 1) 서브컬렉션 메시지 일괄 삭제
+            const subSnap = await firestore.collection('scenarios').doc(query.scenarioId).collection('messages').get();
+            if (!subSnap.empty) {
+                const batch = firestore.batch();
+                subSnap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+                deletedCount += subSnap.size;
+            }
+
+            // 2) 레거시 컬렉션 잔여 메시지 일괄 삭제
+            const legacySnap = await firestore.collection('messages').where('scenarioId', '==', query.scenarioId).get();
+            if (!legacySnap.empty) {
+                const batch = firestore.batch();
+                legacySnap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+                deletedCount += legacySnap.size;
+            }
+            return { deletedCount };
         }
-        const snap = await ref.get();
-        if (snap.empty) return { deletedCount: 0 };
-        const batch = firestore.batch();
-        snap.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        return { deletedCount: snap.size };
+        return { deletedCount: 0 };
     }
 };
 
-// 5. Cloud Image 저장소 (Firestore 청크 분할 저장 - 무료 플랜 영구 보관)
+// 5. Cloud Image 저장소 (시나리오별 폴더 분할 및 Firestore 청크 분할 영구 보관)
 let sharp = null;
 try {
     sharp = require('sharp');
@@ -466,7 +506,7 @@ try {
     console.warn("⚠️ [Sharp] 이미지 압축 라이브러리 미지원 환경, 원본으로 저장합니다.");
 }
 
-async function saveCloudImage(base64String, prefix = 'img') {
+async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
     if (!base64String || typeof base64String !== 'string') return base64String;
     if (base64String.startsWith('http://') || base64String.startsWith('https://') || (base64String.startsWith('/image/') && !base64String.startsWith('/image/data:'))) {
         return base64String;
@@ -488,7 +528,7 @@ async function saveCloudImage(base64String, prefix = 'img') {
         let buffer = Buffer.from(rawData, 'base64');
         const origSizeKb = Math.round(buffer.length / 1024);
 
-        // 🚀 [용량 대폭 감축] Sharp를 사용해 768px WebP로 초고효율 압축 (화질 유지, 용량 95% 절감: 2MB -> ~80KB)
+        // 🚀 [용량 대폭 감축] Sharp를 사용해 768px WebP로 초고효율 압축
         if (sharp) {
             try {
                 buffer = await sharp(buffer)
@@ -503,13 +543,35 @@ async function saveCloudImage(base64String, prefix = 'img') {
         }
 
         const newSizeKb = Math.round(buffer.length / 1024);
-        const imageId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        const CHUNK_SIZE = 700 * 1024; // 700KB (압축 후 보통 100KB 미만이므로 1개 청크로 즉시 완료)
+
+        // 시나리오 ID 자동 감지
+        let targetScenarioId = scenarioId;
+        let fileType = prefix;
+        if (!targetScenarioId && prefix) {
+            const m = prefix.match(/^(?:nsfw_)?(scene|portrait|chat)_([a-zA-Z0-9_-]+)/);
+            if (m) {
+                fileType = m[1];
+                targetScenarioId = m[2];
+            }
+        }
+
+        const timestamp = Date.now();
+        const rand = Math.random().toString(36).substring(2, 8);
+        const filename = targetScenarioId 
+            ? `${fileType}_${timestamp}_${rand}.${ext}`
+            : `${prefix}_${timestamp}_${rand}.${ext}`;
+        const imageId = targetScenarioId
+            ? `${targetScenarioId}_${fileType}_${timestamp}_${rand}`
+            : `${prefix}_${timestamp}_${rand}`;
+
+        const CHUNK_SIZE = 700 * 1024;
         const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
 
         const metaRef = firestore.collection('cloud_images').doc(imageId);
         const batch = firestore.batch();
         batch.set(metaRef, {
+            scenarioId: targetScenarioId || null,
+            filename,
             contentType,
             ext,
             totalSize: buffer.length,
@@ -524,15 +586,18 @@ async function saveCloudImage(base64String, prefix = 'img') {
         }
         await batch.commit();
 
-        // 로컬 디스크 캐시 (로컬 환경 및 Render 프로세스 수명 내 초고속 응답)
+        // 로컬 디스크 캐시 (시나리오별 하위 디렉터리 분리 저장!)
         try {
-            const cacheDir = path.join(__dirname, 'public', 'image');
+            const cacheDir = targetScenarioId
+                ? path.join(__dirname, 'public', 'image', targetScenarioId)
+                : path.join(__dirname, 'public', 'image');
             if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-            fs.writeFileSync(path.join(cacheDir, `${imageId}.${ext}`), buffer);
+            fs.writeFileSync(path.join(cacheDir, filename), buffer);
         } catch (_) {}
 
-        console.log(`☁️ [구글 클라우드 영구 저장 완료] /image/${imageId}.${ext} (압축: ${origSizeKb}KB ➡️ ${newSizeKb}KB, ${totalChunks} 청크)`);
-        return `/image/${imageId}.${ext}`;
+        const returnedUrl = targetScenarioId ? `/image/${targetScenarioId}/${filename}` : `/image/${filename}`;
+        console.log(`☁️ [구글 클라우드 영구 저장 완료] ${returnedUrl} (압축: ${origSizeKb}KB ➡️ ${newSizeKb}KB, ${totalChunks} 청크)`);
+        return returnedUrl;
     } catch (err) {
         console.error("❌ 클라우드 이미지 저장 에러:", err.message);
         return base64String;
@@ -542,13 +607,25 @@ async function saveCloudImage(base64String, prefix = 'img') {
 async function getCloudImage(filenameOrId) {
     const firestore = checkDb();
     try {
-        const parts = filenameOrId.split('.');
-        const imageId = parts.length > 1 ? parts.slice(0, -1).join('.') : filenameOrId;
+        const cleanName = filenameOrId.includes('/') ? filenameOrId.split('/').pop() : filenameOrId;
+        const parts = cleanName.split('.');
+        const imageId = parts.length > 1 ? parts.slice(0, -1).join('.') : cleanName;
 
         let metaDoc = await firestore.collection('cloud_images').doc(imageId).get();
+        if (!metaDoc.exists && filenameOrId.includes('/')) {
+            const altId = filenameOrId.replace('/', '_').split('.')[0];
+            metaDoc = await firestore.collection('cloud_images').doc(altId).get();
+        }
         if (!metaDoc.exists) {
-            metaDoc = await firestore.collection('cloud_images').doc(filenameOrId).get();
-            if (!metaDoc.exists) return null;
+            metaDoc = await firestore.collection('cloud_images').doc(cleanName).get();
+            if (!metaDoc.exists) {
+                const qSnap = await firestore.collection('cloud_images').where('filename', '==', cleanName).limit(1).get();
+                if (!qSnap.empty) {
+                    metaDoc = qSnap.docs[0];
+                } else {
+                    return null;
+                }
+            }
         }
 
         const meta = metaDoc.data();
@@ -560,7 +637,9 @@ async function getCloudImage(filenameOrId) {
 
         return {
             buffer: fullBuffer,
-            contentType: meta.contentType || 'image/png'
+            contentType: meta.contentType || 'image/png',
+            scenarioId: meta.scenarioId || null,
+            filename: meta.filename || cleanName
         };
     } catch (err) {
         console.error("❌ 클라우드 이미지 읽기 에러:", err.message);

@@ -1298,12 +1298,14 @@ function addMessage(sender, text, isImage = false) {
                     })
                 });
             } else {
-                throw new Error("이미지 생성 실패");
+                const errJson = await response.json().catch(() => null);
+                const errMsg = (errJson && (errJson.error || (errJson.detail && errJson.detail.message))) || "이미지 생성 실패";
+                throw new Error(errMsg);
             }
         } catch (err) {
             hideLoading();
             console.error(err);
-            alert("이미지 생성 중 에러가 발생했습니다.");
+            alert("이미지 생성 안내: " + (err.message || "서버 통신 에러"));
         }
     }
 

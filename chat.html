@@ -831,12 +831,14 @@
                         })
                     });
                 } else {
-                    alert("장면 삽화 생성에 실패했습니다.");
+                    const errJson = await response.json().catch(() => null);
+                    const errMsg = (errJson && (errJson.error || (errJson.detail && errJson.detail.message))) || "장면 삽화 생성에 실패했습니다.";
+                    alert("삽화 생성 안내: " + errMsg);
                 }
             } catch (err) {
                 hideTypingLoading();
                 console.error(err);
-                alert("삽화 생성 통신 에러");
+                alert("삽화 생성 통신 에러: " + (err.message || "연결 실패"));
             }
         }
 

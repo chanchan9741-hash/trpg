@@ -907,75 +907,114 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
     }
 });
 
-app.post('/api/generate-image', async (req, res) => {
-    try {
+// 🎨 이미지 생성 프롬프트 안전 필터 정제 함수
+function sanitizeImagePrompt(text) {
+    if (!text) return "";
+    return text
+        // (없음) 태그 완벽 제거
+        .replace(/(투구|갑옷|상의|하의|악세사리|장신구|무기)\s*\(\s*없음\s*\)/g, "")
+        // 안전 필터(content_policy_violation) 유발 단어 완화
+        .replace(/역바니복|역바니/g, "바니 스타일 의상")
+        .replace(/바니걸/g, "바니 스타일 의상")
+        .replace(/가슴이\s*크고/g, "매력적인 체형과")
+        .replace(/큰\s*가슴/g, "매력적인 체형")
+        .replace(/가슴/g, "상체")
+        .replace(/알몸|나체|누드|노출/g, "활동적인 옷차림")
+        .replace(/토막|사지절단/g, "상처")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+// 🎨 FactChat 이미지 생성 API 호출 (안전 필터 감지 시 1회 자동 안전 재시도 탑재)
+async function requestFactChatImage(prompt, apiKey, defaultSafePrompt = "") {
+    const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
+    const sanitized = sanitizeImagePrompt(prompt);
+    
+    console.log(`🎨 [AI 그림 생성 전송]:\n${sanitized}`);
+
+    let response = await fetch(SCH_GATEWAY_URL, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
+            "prompt": sanitized,
+            "size": "1024x1024",
+            "response_format": "url"
+        })
+    });
+
+    let responseText = await response.text();
+
+    // 🚨 안전 필터(content_policy_violation) 감지 시 부드러운 판타지 표현으로 1회 즉시 재시도
+    if (!response.ok && (responseText.includes("content_policy_violation") || response.status === 400)) {
+        console.warn("⚠️ [안전 필터 정책 감지] 프롬프트를 표준 판타지 화풍으로 자동 완화하여 1회 재시도합니다...");
+        const fallback = defaultSafePrompt || "수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채. 판타지 세계의 멋진 모험가가 장엄하고 아름다운 배경 속에서 활약하는 걸작 일러스트. 단정한 여행자 복장.";
         
-        
-        const { scenarioId } = req.body;
-        const scenario = await Scenario.findById(scenarioId);
-        if (!scenario) return res.status(404).send("시나리오 없음");
-
-        // ✅ 1. 진짜 팩트챗 클라우드 주소
-        const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
-        const apiKey = process.env.OPENAI_API_KEY;
-
-        // ✅ 2. [풍부한 프롬프트 조립]
-        // 세계관 배경 정보(worldSetting)와 지금까지의 주요 사건들(questLines)을 합칩니다.
-        const characterInfo = scenario.characterInfo;
-        const worldContext = scenario.worldSetting; 
-        const recentEvents = scenario.questLines.length > 0 
-            ? scenario.questLines.slice(-3).join('. ') // 최근 3개 사건만 가져와서 문맥 연결
-            : "모험이 막 시작된 상황";
-        
-        const equipEntries = scenario.equipment && typeof scenario.equipment.entries === 'function'
-            ? Array.from(scenario.equipment.entries()) 
-            : [];
-        let currentEquipString = equipEntries.length > 0 
-            ? equipEntries.map(([k, v]) => `${k}(${v})`).join(', ') 
-            : "기본 복장";
-
-
-        // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
-        let richPrompt = "";
-        if (scenario.mode === 'chatbot') {
-            richPrompt = `
-        그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트'}.
-        캐릭터 이름: ${scenario.title}.
-        캐릭터 외형: ${scenario.appearance || '매력적인 인물'}.
-        성격 및 관계: ${characterInfo}, ${worldContext}.
-        최근 대화 상황: ${recentEvents}.
-        캐릭터와 마주보고 대화하거나 감정을 교류하는 매력적이고 몰입감 넘치는 1:1 대화 장면 일러스트를 아름답게 그려줘.`;
-        } else {
-            richPrompt = `
-        그림 스타일(화풍): ${scenario.artStyle}.
-        캐릭터 외형: ${scenario.appearance}.
-        캐릭터 설정: ${characterInfo}
-        배경 세계관: ${worldContext}.
-        현재 상황: ${recentEvents}.
-        현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
-        }
-        console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
-
-        // ✅ 3. 학교 API 규격에 맞춰 전송
-        const response = await fetch(SCH_GATEWAY_URL, {
+        response = await fetch(SCH_GATEWAY_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
-                "prompt": richPrompt, // 👈 배경과 사건이 합쳐진 풍부한 묘사문
+                "model": "gpt-image-2.5-sunburst",
+                "prompt": fallback,
                 "size": "1024x1024",
                 "response_format": "url"
             })
         });
+        responseText = await response.text();
+    }
 
-        
+    return { response, responseText };
+}
 
-        
+app.post('/api/generate-image', async (req, res) => {
+    try {
+        const { scenarioId } = req.body;
+        const scenario = await Scenario.findById(scenarioId);
+        if (!scenario) return res.status(404).send("시나리오 없음");
 
-        const responseText = await response.text();
+        const apiKey = process.env.OPENAI_API_KEY;
+
+        // 착용 중인 장비만 선별 (없음 항목 제외)
+        const equipEntries = (scenario.equipment && typeof scenario.equipment.entries === 'function')
+            ? Array.from(scenario.equipment.entries()) 
+            : [];
+        const wornItems = equipEntries.filter(([k, v]) => v && v !== '없음' && !v.includes('없음'));
+        const currentEquipString = wornItems.length > 0 
+            ? `착용 장비: ${wornItems.map(([k, v]) => `${k}(${v})`).join(', ')}`
+            : "복장: 단정하고 활동적인 여행자 복장";
+
+        const recentEvents = scenario.questLines.length > 0 
+            ? scenario.questLines.slice(-3).join('. ') 
+            : "모험이 시작된 상황";
+
+        let richPrompt = "";
+        if (scenario.mode === 'chatbot') {
+            richPrompt = `
+        그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트'}.
+        캐릭터 이름: ${scenario.title}.
+        캐릭터 외형: ${scenario.appearance || '매력적인 인물'}.
+        성격 및 관계: ${scenario.characterInfo}, ${scenario.worldSetting}.
+        최근 대화 상황: ${recentEvents}.
+        캐릭터와 마주보고 대화하거나 감정을 교류하는 매력적이고 몰입감 넘치는 1:1 대화 장면 일러스트를 아름답게 그려줘.`;
+        } else {
+            richPrompt = `
+        그림 스타일(화풍): ${scenario.artStyle || '수려한 애니메이션 화풍'}.
+        캐릭터 외형: ${scenario.appearance || '모험가'}.
+        캐릭터 설정: ${scenario.characterInfo || '모험가'}
+        배경 세계관: ${scenario.worldSetting || '판타지 세계'}.
+        현재 모험 상황: ${recentEvents}.
+        ${currentEquipString}.`;
+        }
+
+        const safeDefault = `${scenario.artStyle || '수려한 일본 애니메이션 화풍'}. 판타지 세계의 모험가 '${scenario.title || '주인공'}'이(가) 펼치는 웅장하고 아름다운 모험의 순간. 단정한 여행자 복장.`;
+        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, safeDefault);
+
         if (!response.ok) {
             logError('장면 삽화 생성 FactChat API 오류 (/api/generate-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
                 status: response.status,
@@ -985,25 +1024,18 @@ app.post('/api/generate-image', async (req, res) => {
         }
 
         const data = JSON.parse(responseText);
-
-        
-        // ✅ [수정] url로 오든 b64_json으로 오든 다 잡아냅니다.
         let extractedImage = (data.data && data.data[0] && (data.data[0].url || data.data[0].b64_json)) || data.url || data.b64_json;
 
         if (extractedImage) {
-            // ✅ 만약 짧은 http 링크가 아니라면, HTML이 바로 인식할 수 있는 형태로 조립합니다.
             if (!extractedImage.startsWith('http') && !extractedImage.startsWith('data:image')) {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            // 🚨 구글 클라우드(Firestore) 영구 저장
             const savedUrl = await saveBase64Image(extractedImage, `scene_${scenarioId}`);
-
-            console.log("✅ 이미지 생성 및 데이터 파싱 완료! 경로:", savedUrl);
-            // 프론트엔드로 조립된 데이터를 보냅니다.
+            console.log("✅ 이미지 생성 및 저장 완료! 경로:", savedUrl);
             res.json({ imageUrl: savedUrl });
         } else {
-            throw new Error("이미지 URL 또는 데이터 추출 실패: 응답 본문 = " + responseText.slice(0, 300));
+            throw new Error("이미지 URL 추출 실패: " + responseText.slice(0, 300));
         }
 
     } catch (error) {
@@ -1022,7 +1054,7 @@ app.post('/api/chat/save-image', async (req, res) => {
         await Message.create({
             scenarioId,
             role: role || 'assistant',
-            content: content // 이미지 URL 주소가 들어갑니다
+            content: content
         });
         res.json({ success: true, url: content });
     } catch (err) {
@@ -1041,54 +1073,35 @@ app.post('/api/generate-player-image', async (req, res) => {
             return res.status(404).json({ error: "시나리오 또는 주인공 설정이 없습니다." });
         }
 
-        // ✅ 1. 진짜 팩트챗 클라우드 주소 (기존 성공 코드 적용)
-        const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
         const apiKey = process.env.OPENAI_API_KEY;
 
-        // ✅ 2. 주인공 설정을 바탕으로 프롬프트 조립
-        const characterInfo = scenario.characterInfo;
-        const equipEntries = scenario.equipment && typeof scenario.equipment.entries === 'function'
+        const equipEntries = (scenario.equipment && typeof scenario.equipment.entries === 'function')
             ? Array.from(scenario.equipment.entries()) 
             : [];
-        let currentEquipString = equipEntries.length > 0 
-            ? equipEntries.map(([k, v]) => `${k}(${v})`).join(', ') 
-            : "기본 복장";
+        const wornItems = equipEntries.filter(([k, v]) => v && v !== '없음' && !v.includes('없음'));
+        const currentEquipString = wornItems.length > 0 
+            ? `착용 장비: ${wornItems.map(([k, v]) => `${k}(${v})`).join(', ')}`
+            : "복장: 단정한 여행자 복장";
             
         let imagePrompt = "";
         if (scenario.mode === 'chatbot') {
             imagePrompt = `제타(Zeta) 스타일 매력적인 캐릭터 프로필 일러스트. AI 캐릭터 '${scenario.title}'의 상반신/얼굴 중심 고품질 초상화를 1장 그려줘.
             캐릭터 이름: ${scenario.title}
-            성격 및 특징: ${characterInfo}
+            성격 및 특징: ${scenario.characterInfo}
             외형 묘사: ${scenario.appearance || '매력적인 인물'}
             배경 분위기: ${scenario.worldSetting}
             그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트, 걸작'}`;
         } else {
             imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 
-            설정: ${characterInfo}
+            설정: ${scenario.characterInfo}
             그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
             캐릭터 외형: ${scenario.appearance || '기본 외형'}
-            현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
+            ${currentEquipString}.`;
         }
 
-        console.log(`\n================ [🖼️ 플레이어 사진 생성 요청] ================`);
-        console.log(`요청 프롬프트: ${imagePrompt}`);
+        const safeDefault = `${scenario.artStyle || '수려한 애니메이션 스타일'}. 판타지 캐릭터 '${scenario.title || '주인공'}'의 고품질 얼굴 중심 프로필 초상화 일러스트.`;
+        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, safeDefault);
 
-        // ✅ 3. 학교 API 규격에 맞춰 전송
-        const response = await fetch(SCH_GATEWAY_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
-                "prompt": imagePrompt,
-                "size": "1024x1024",
-                "response_format": "url"
-            })
-        });
-
-        const responseText = await response.text();
         if (!response.ok) {
             logError('초상화 생성 FactChat API 오류 (/api/generate-player-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
                 status: response.status,
@@ -1098,27 +1111,21 @@ app.post('/api/generate-player-image', async (req, res) => {
         }
 
         const data = JSON.parse(responseText);
-
-        // ✅ 4. 이미지 데이터 추출 (URL 또는 Base64 파싱)
         let extractedImage = (data.data && data.data[0] && (data.data[0].url || data.data[0].b64_json)) || data.url || data.b64_json;
 
         if (extractedImage) {
-            // 짧은 문자가 왔을 경우 Base64 이미지로 조립
             if (!extractedImage.startsWith('http') && !extractedImage.startsWith('data:image')) {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            // 🚨 구글 클라우드(Firestore) 영구 저장
             const savedUrl = await saveBase64Image(extractedImage, `portrait_${scenarioId}`);
-
-            // ✅ 5. DB에 저장 및 프론트엔드로 전송
             scenario.playerImageUrl = savedUrl;
             await scenario.save();
 
             console.log("✅ 플레이어 초상화 생성 및 저장 완료! 경로:", savedUrl);
-            res.json({ playerImageUrl: savedUrl }); // 프론트로 전달
+            res.json({ playerImageUrl: savedUrl });
         } else {
-            throw new Error("이미지 URL 또는 데이터 추출 실패: 응답 본문 = " + responseText.slice(0, 300));
+            throw new Error("이미지 URL 추출 실패: " + responseText.slice(0, 300));
         }
 
     } catch (error) {

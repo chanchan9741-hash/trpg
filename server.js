@@ -5,68 +5,20 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
-const mongoose = require('mongoose');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
 const { OpenAI } = require('openai');
+const app = express();
 
 // 1. 순천향대 AI Hub 설정
-// 주의: .env 파일에 SCH_AIHUB_API_KEY가 정확히 입력되어 있어야 합니다.
 const openai = new OpenAI({
     apiKey: process.env.SCH_AIHUB_API_KEY,
     baseURL: "https://factchat-cloud.mindlogic.ai/v1/gateway"
 });
 
-const app = express();
-
-// 2. MongoDB 연결
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB 연결 성공!"))
-    .catch(err => console.error("❌ MongoDB 연결 실패:", err));
-
-// 3. 모델 정의
-const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
-    googleId: String, username: String, email: String
-}));
-
-const Scenario = mongoose.models.Scenario || mongoose.model('Scenario', new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    title: String,
-    worldSetting: String,
-    characterInfo: String,
-    questLines: [String],
-    quests: { type: Map, of: String, default: {} },
-    inventory: { type: Map, of: Number, default: {} }, // 아이템 리스트 추가
-    currentLocation: { type: String, default: '시작 지점' },
-    discoveredLocations: { type: [String], default: ['시작 지점'] },
-    hp: { type: Number, default: 100 },
-    maxHp: { type: Number, default: 100 },
-    gold: { type: Number, default: 0 },
-    characters: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, 
-    party: { type: [String], default: [] }, // 현재 동료로 합류한 캐릭터 이름 목록
-    skills: { type: [String], default: ['기본 공격'] },
-    playerImageUrl: { type: String, default: null },
-    equipment: { 
-    type: Map, 
-    of: String, 
-    default: { "투구": "없음", "갑옷": "없음", "상의": "없음", "하의": "없음", "악세사리": "없음", "무기": "없음" }
-},
-    createdAt: { type: Date, default: Date.now },
-    appearance: { type: String, default: "" },                                   // 👈 추가
-    artStyle: { type: String, default: "고품질의 다크 판타지 유화 스타일, 걸작" }, // 👈 추가
-    bestiary: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
-    currentEnemy: { type: mongoose.Schema.Types.Mixed, default: null },
-    
-    createdAt: { type: Date, default: Date.now }
-}));
-
-const Message = mongoose.models.Message || mongoose.model('Message', new mongoose.Schema({
-    scenarioId: { type: mongoose.Schema.Types.ObjectId, ref: 'Scenario' },
-    role: String,
-    content: String,
-    createdAt: { type: Date, default: Date.now }
-}));
+// 2. Firebase Firestore 데이터베이스 및 모델 연동
+const { User, Scenario, Message } = require('./db');
 
 // 4. 미들웨어 설정
 app.use(express.json({ limit: '50mb' })); 

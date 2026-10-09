@@ -22,6 +22,42 @@ const openai = new OpenAI({
 // 2. Firebase Firestore 데이터베이스 및 모델 연동
 const { User, Scenario, Message, saveCloudImage, getCloudImage } = require('./db');
 
+// 🚨 터미널 에러 로깅 헬퍼 함수
+function logError(context, error, extra = null) {
+    const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    console.error("\n" + "=".repeat(65));
+    console.error(`🚨 [오류 감지: ${context}] (시간: ${time})`);
+    if (extra) {
+        try {
+            console.error("📋 요청 정보:", typeof extra === 'object' ? JSON.stringify(extra, null, 2) : extra);
+        } catch (_) {
+            console.error("📋 요청 정보:", extra);
+        }
+    }
+    if (error) {
+        console.error("💥 오류 메시지:", error.message || error);
+        if (error.status || error.statusCode) {
+            console.error("📡 HTTP 상태 코드:", error.status || error.statusCode);
+        }
+        if (error.response) {
+            console.error("📡 외부 API 응답 코드:", error.response.status);
+            console.error("📡 외부 API 응답 데이터:", error.response.data);
+        }
+        if (error.stack) {
+            console.error("📍 스택 추적:\n" + error.stack);
+        }
+    }
+    console.error("=".repeat(65) + "\n");
+}
+
+// 🚨 프로세스 전역 에러 리스너 (서버 비정상 다운 방지 및 터미널 출력)
+process.on('uncaughtException', (err) => {
+    logError('Node.js 미처리 예외 (uncaughtException)', err);
+});
+process.on('unhandledRejection', (reason) => {
+    logError('Node.js 비동기 프로미스 거부 (unhandledRejection)', reason);
+});
+
 // 3. 구글 클라우드(Firestore) 영구 저장 헬퍼 함수
 async function saveBase64Image(base64String, prefix = 'img') {
     return await saveCloudImage(base64String, prefix);
@@ -57,11 +93,10 @@ app.get('/image/:filename', async (req, res) => {
         res.set('Cache-Control', 'public, max-age=31536000'); // 브라우저 캐시 1년
         return res.send(cloudImg.buffer);
     } catch (err) {
-        console.error("❌ 이미지 서빙 오류:", err.message);
+        logError('이미지 서빙 오류 (/image/' + filename + ')', err);
         return res.status(500).send("이미지 로드 실패");
     }
 }); 
-app.use(express.json());
 app.use(session({
     secret: process.env.SESSION_SECRET || 'trpg_secret',
     resave: false,
@@ -74,6 +109,19 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// 🌐 브라우저 프론트엔드 오류 수집 API (브라우저 오류를 서버 터미널로 실시간 출력)
+app.post('/api/report-error', (req, res) => {
+    const { message, source, lineno, colno, stack, page } = req.body || {};
+    const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    console.error("\n" + "-".repeat(65));
+    console.error(`🌐 [브라우저 프론트엔드 오류 감지] (시간: ${time})`);
+    console.error(`📄 발생 페이지: ${page || '알 수 없음'}`);
+    console.error(`💥 내용: ${message || '오류 내용 없음'}`);
+    if (source || lineno) console.error(`📍 위치: ${source || ''}:${lineno || 0}:${colno || 0}`);
+    if (stack) console.error(`📋 스택:\n${stack}`);
+    console.error("-".repeat(65) + "\n");
+    res.json({ received: true });
+});
 
 // 5. Passport 구글 로그인
 passport.use(new GoogleStrategy({
@@ -93,7 +141,10 @@ passport.use(new GoogleStrategy({
             });
         }
         return done(null, user);
-    } catch (err) { return done(err, null); }
+    } catch (err) { 
+        logError('Google OAuth 로그인 처리 오류', err);
+        return done(err, null); 
+    }
   }
 ));
 
@@ -102,7 +153,10 @@ passport.deserializeUser(async (id, done) => {
     try {
         const user = await User.findById(id);
         done(null, user);
-    } catch (err) { done(err, null); }
+    } catch (err) { 
+        logError('사용자 세션 복원 오류 (deserializeUser)', err);
+        done(err, null); 
+    }
 });
 
 // ⚔️ 전투 팝업창 HTML을 제공하는 라우터 추가
@@ -133,22 +187,23 @@ app.get('/auth/logout', (req, res) => {
 });
 
 app.get('/api/my-scenarios', async (req, res) => {
-    if (!req.user) return res.json([]);
-    const scenarios = await Scenario.find({ userId: req.user._id }).sort({ createdAt: -1 });
-    res.json(scenarios);
+    try {
+        if (!req.user) return res.json([]);
+        const scenarios = await Scenario.find({ userId: req.user._id }).sort({ createdAt: -1 });
+        res.json(scenarios);
+    } catch (err) {
+        logError('내 시나리오 목록 조회 (/api/my-scenarios)', err, { userId: req.user && req.user._id });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.get('/api/chat/:scenarioId', async (req, res) => {
     try {
         const { scenarioId } = req.params;
-        console.log("🔍 요청받은 시나리오 ID:", scenarioId); // 터미널에 찍힘
-
         const messages = await Message.find({ scenarioId }).sort({ createdAt: 1 });
-        console.log(`📦 찾은 메시지 개수: ${messages.length}개`); // 개수 확인
-
         res.json(messages); 
     } catch (err) {
-        console.error("❌ 로그 불러오기 실패:", err);
+        logError('대화 기록 불러오기 (/api/chat/' + req.params.scenarioId + ')', err);
         res.status(500).send("로그 실패");
     }
 });
@@ -176,26 +231,30 @@ app.get('/api/scenario/:id', async (req, res) => {
             currentEnemy: scenario.currentEnemy || null
         });
     } catch (err) {
-        console.error("시나리오 로드 에러:", err);
+        logError('시나리오 상세 로드 (/api/scenario/' + req.params.id + ')', err);
         res.status(500).send(err.message);
     }
 });
 
-
 app.post('/api/scenarios', async (req, res) => {
-    if (!req.user) return res.status(401).send("Unauthorized");
-    
-    const newScenario = new Scenario({
-        userId: req.user._id,
-        mode: req.body.mode || 'trpg', // 'trpg' | 'chatbot'
-        title: req.body.title,
-        worldSetting: req.body.worldSetting,
-        characterInfo: req.body.characterInfo,
-        appearance: req.body.appearance,   
-        artStyle: req.body.artStyle        
-    });
-    await newScenario.save();
-    res.json({ success: true, scenarioId: newScenario.id });
+    try {
+        if (!req.user) return res.status(401).send("Unauthorized");
+        
+        const newScenario = new Scenario({
+            userId: req.user._id,
+            mode: req.body.mode || 'trpg', // 'trpg' | 'chatbot'
+            title: req.body.title,
+            worldSetting: req.body.worldSetting,
+            characterInfo: req.body.characterInfo,
+            appearance: req.body.appearance,   
+            artStyle: req.body.artStyle        
+        });
+        await newScenario.save();
+        res.json({ success: true, scenarioId: newScenario.id });
+    } catch (err) {
+        logError('새 시나리오 생성 (/api/scenarios)', err, { body: req.body });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 
@@ -753,7 +812,11 @@ if (isUpdated) {
         });
 
     } catch (error) {
-        console.error("❌ 에러 발생:", error);
+        logError('AI 대화 진행 (/api/chat)', error, {
+            scenarioId,
+            model: (typeof targetModel !== 'undefined' ? targetModel : model),
+            userMessage
+        });
         if (!res.headersSent) res.status(500).send("서버 에러: " + error.message);
     }
 
@@ -782,7 +845,7 @@ app.put('/api/scenarios/:id', async (req, res) => {
 
         res.json({ message: "수정 성공", scenario: updatedScenario });
     } catch (error) {
-        console.error("시나리오 수정 에러:", error);
+        logError('시나리오 수정 (/api/scenarios/' + req.params.id + ')', error);
         res.status(500).send("서버 오류가 발생했습니다.");
     }
 });
@@ -808,6 +871,7 @@ app.delete('/api/scenarios/:id', async (req, res) => {
 
         res.status(200).send("삭제 성공");
     } catch (error) {
+        logError('시나리오 삭제 (/api/scenarios/' + req.params.id + ')', error);
         res.status(500).send("삭제 실패: " + error.message);
     }
 });
@@ -838,6 +902,7 @@ app.delete('/api/chat/:scenarioId', async (req, res) => {
         
         res.send("초기화 완료");
     } catch (err) { 
+        logError('대화 로그 초기화 (/api/chat/' + req.params.scenarioId + ')', err);
         res.status(500).send(err.message); 
     }
 });
@@ -912,6 +977,10 @@ app.post('/api/generate-image', async (req, res) => {
 
         const responseText = await response.text();
         if (!response.ok) {
+            logError('장면 삽화 생성 FactChat API 오류 (/api/generate-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
+                status: response.status,
+                prompt: richPrompt
+            });
             return res.status(response.status).send(responseText);
         }
 
@@ -934,11 +1003,11 @@ app.post('/api/generate-image', async (req, res) => {
             // 프론트엔드로 조립된 데이터를 보냅니다.
             res.json({ imageUrl: savedUrl });
         } else {
-            throw new Error("이미지 URL 또는 데이터 추출 실패");
+            throw new Error("이미지 URL 또는 데이터 추출 실패: 응답 본문 = " + responseText.slice(0, 300));
         }
 
     } catch (error) {
-        console.error("❌ 이미지 생성 실패:", error.message);
+        logError('장면 이미지 생성 처리 실패 (/api/generate-image)', error, { scenarioId: req.body && req.body.scenarioId });
         res.status(500).json({ error: error.message });
     }
 });
@@ -957,7 +1026,7 @@ app.post('/api/chat/save-image', async (req, res) => {
         });
         res.json({ success: true, url: content });
     } catch (err) {
-        console.error("❌ 이미지 저장 실패:", err);
+        logError('이미지 대화 저장 실패 (/api/chat/save-image)', err, { scenarioId: req.body && req.body.scenarioId });
         res.status(500).send("이미지 저장 중 오류 발생");
     }
 });
@@ -1021,6 +1090,10 @@ app.post('/api/generate-player-image', async (req, res) => {
 
         const responseText = await response.text();
         if (!response.ok) {
+            logError('초상화 생성 FactChat API 오류 (/api/generate-player-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
+                status: response.status,
+                prompt: imagePrompt
+            });
             return res.status(response.status).json({ error: responseText });
         }
 
@@ -1045,14 +1118,15 @@ app.post('/api/generate-player-image', async (req, res) => {
             console.log("✅ 플레이어 초상화 생성 및 저장 완료! 경로:", savedUrl);
             res.json({ playerImageUrl: savedUrl }); // 프론트로 전달
         } else {
-            throw new Error("이미지 URL 또는 데이터 추출 실패");
+            throw new Error("이미지 URL 또는 데이터 추출 실패: 응답 본문 = " + responseText.slice(0, 300));
         }
 
     } catch (error) {
-        console.error("❌ 초상화 생성 실패:", error.message);
+        logError('초상화 생성 실패 (/api/generate-player-image)', error, { scenarioId: req.body && req.body.scenarioId });
         res.status(500).json({ error: error.message });
     }
 });
+
 // 🎒 [추가] 드래그 앤 드롭 장비 수동 장착 API
 // 🎒 [수정] 드래그 앤 드롭 장비 수동 장착/해제 API (가방 수량 연동 완결판)
 app.post('/api/scenario/:id/equip', async (req, res) => {
@@ -1095,7 +1169,7 @@ app.post('/api/scenario/:id/equip', async (req, res) => {
             inventory: Object.fromEntries(scenario.inventory.entries())
         });
     } catch (err) {
-        console.error("장착 에러:", err);
+        logError('장비 장착/해제 에러 (/api/scenario/' + req.params.id + '/equip)', err, { body: req.body });
         res.status(500).send(err.message);
     }
 });
@@ -1118,11 +1192,21 @@ app.post('/api/scenario/:id/bestiary', async (req, res) => {
         await scenario.save();
         res.json({ success: true, bestiary: Object.fromEntries(scenario.bestiary.entries()) });
     } catch (err) {
-        console.error("도감 추가 에러:", err);
+        logError('도감 추가 에러 (/api/scenario/' + req.params.id + '/bestiary)', err, { body: req.body });
         res.status(500).send(err.message);
     }
 });
 
+// 🚨 8. Express 미처리 에러 핸들러 미들웨어 (모든 라우트 에러를 터미널로 출력)
+app.use((err, req, res, next) => {
+    logError(`Express 미처리 라우트 에러 [${req.method} ${req.originalUrl}]`, err, {
+        userId: req.user ? req.user._id : '비로그인',
+        body: req.body
+    });
+    if (!res.headersSent) {
+        res.status(500).json({ error: err.message || "서버 내부 오류가 발생했습니다." });
+    }
+});
 
 // 9. 서버 실행
 const PORT = process.env.PORT || 8080;

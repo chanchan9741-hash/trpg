@@ -196,6 +196,68 @@
             border-radius: 12px;
             border: 1px dashed var(--border-strong);
         }
+
+        /* 🏷️ 모드 배지 스타일 */
+        .card-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .card-badge.trpg {
+            background: var(--surface-2);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+        }
+        .card-badge.chatbot {
+            background: rgba(255, 90, 121, 0.15);
+            color: #FF5A79;
+            border: 1px solid rgba(255, 90, 121, 0.35);
+        }
+
+        /* 🎛️ 필터 탭 바 */
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 24px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            background: var(--surface);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .filter-tab {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-tab:hover {
+            color: var(--text-primary);
+        }
+        .filter-tab.active {
+            background: var(--brand);
+            color: #fff;
+        }
     </style>
 </head>
 <body class="has-sidebar">
@@ -257,21 +319,37 @@
 
     <main>
         <section class="hero-section">
-            <h1>당신의 모험을 시작하세요</h1>
-            <p>AI 마스터와 함께 당신만의 시나리오를 완성하세요.</p>
+            <h1>당신의 모험과 이야기를 시작하세요</h1>
+            <p>정통 TRPG 모험부터 제타(Zeta) 스타일 인물 챗봇까지 자유롭게 즐겨보세요.</p>
             <button class="btn btn-primary" style="margin-top: 20px;" onclick="createNewScenario()">
-                <i class="bi bi-plus-lg"></i> 새 시나리오 생성
+                <i class="bi bi-plus-lg"></i> 새 시나리오 / 챗봇 생성
             </button>
         </section>
 
-        <h2 style="color: var(--text-primary); border-bottom: 2px solid var(--brand); padding-bottom: 10px; display: inline-block;">내 시나리오 목록</h2>
-        <div class="grid" id="scenario-grid" style="margin-top: 20px;">
+        <div class="filter-bar">
+            <h2 style="color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-collection-fill" style="color: var(--brand);"></i> 내 목록
+            </h2>
+            <div class="filter-tabs">
+                <button class="filter-tab active" id="tab-all" onclick="setFilter('all')">
+                    전체 (<span id="count-all">0</span>)
+                </button>
+                <button class="filter-tab" id="tab-trpg" onclick="setFilter('trpg')">
+                    <i class="bi bi-shield-shaded"></i> TRPG (<span id="count-trpg">0</span>)
+                </button>
+                <button class="filter-tab" id="tab-chatbot" onclick="setFilter('chatbot')">
+                    <i class="bi bi-chat-heart-fill" style="color: #FF5A79;"></i> 인물 챗봇 (<span id="count-chatbot">0</span>)
+                </button>
+            </div>
+        </div>
+        <div class="grid" id="scenario-grid">
             <div id="scenario-list-empty">로그인하여 시나리오를 확인하세요.</div>
         </div>
     </main>
 
     <script>
-        // 팝업창용 변수(currentScenarios)는 이제 안 쓰니까 지웠습니다!
+        let allScenarios = [];
+        let currentFilter = 'all';
 
         // 페이지 로드 시 사용자 상태 확인
         window.onload = async () => {
@@ -303,42 +381,91 @@
             }
         };
 
+        // 필터 탭 변경
+        function setFilter(filter) {
+            currentFilter = filter;
+            ['all', 'trpg', 'chatbot'].forEach(f => {
+                const tab = document.getElementById(`tab-${f}`);
+                if (tab) {
+                    if (f === filter) tab.classList.add('active');
+                    else tab.classList.remove('active');
+                }
+            });
+            renderScenarioGrid();
+        }
+
         // 내 시나리오 목록 가져오기
         async function loadMyScenarios() {
             const grid = document.getElementById('scenario-grid');
             try {
                 const response = await fetch('/api/my-scenarios');
-                const scenarios = await response.json();
+                allScenarios = await response.json();
 
-                if (scenarios.length > 0) {
-                    grid.innerHTML = ''; 
-                    scenarios.forEach(s => {
-                        const card = document.createElement('div');
-                        card.className = 'card';
-                        card.onclick = () => location.href = `/game/${s._id}`;
-                        
-                        // 🔥 여기서 수정 버튼을 누르면 '/edit/아이디' 로 이동하도록 바꿨습니다!
-                        card.innerHTML = `
-                            <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')" title="삭제">
-                                <i class="bi bi-trash"></i>
-                            </div>
-                            <div class="edit-btn" onclick="event.stopPropagation(); location.href='/edit/${s._id}';" title="수정">
-                                <i class="bi bi-pencil"></i>
-                            </div>
-                            <h3>${s.title}</h3>
-                            <p>${s.worldSetting || '설명이 없습니다.'}</p>
-                            <div class="card-footer">
-                                <span><i class="bi bi-calendar3"></i> ${new Date(s.createdAt).toLocaleDateString()}</span>
-                                <span>입장하기 <i class="bi bi-arrow-right"></i></span>
-                            </div>
-                        `;
-                        grid.appendChild(card);
-                    });
-                } else {
-                    grid.innerHTML = '<div id="scenario-list-empty">아직 만든 시나리오가 없습니다. <br><br>위의 [새 시나리오 생성] 버튼을 눌러 모험을 시작하세요!</div>';
-                }
+                updateFilterCounts();
+                renderScenarioGrid();
             } catch (err) {
                 grid.innerHTML = '<div id="scenario-list-empty">시나리오를 불러오지 못했습니다.</div>';
+            }
+        }
+
+        function updateFilterCounts() {
+            const trpgCount = allScenarios.filter(s => s.mode !== 'chatbot').length;
+            const chatbotCount = allScenarios.filter(s => s.mode === 'chatbot').length;
+            
+            document.getElementById('count-all').innerText = allScenarios.length;
+            document.getElementById('count-trpg').innerText = trpgCount;
+            document.getElementById('count-chatbot').innerText = chatbotCount;
+        }
+
+        function renderScenarioGrid() {
+            const grid = document.getElementById('scenario-grid');
+            let filtered = allScenarios;
+            if (currentFilter === 'trpg') {
+                filtered = allScenarios.filter(s => s.mode !== 'chatbot');
+            } else if (currentFilter === 'chatbot') {
+                filtered = allScenarios.filter(s => s.mode === 'chatbot');
+            }
+
+            if (filtered.length > 0) {
+                grid.innerHTML = ''; 
+                filtered.forEach(s => {
+                    const isChatbot = (s.mode === 'chatbot');
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.onclick = () => location.href = `/game/${s._id}`;
+                    
+                    const badgeHtml = isChatbot 
+                        ? `<div class="card-badge chatbot"><i class="bi bi-chat-heart-fill"></i> 인물 챗봇</div>`
+                        : `<div class="card-badge trpg"><i class="bi bi-shield-shaded"></i> TRPG 모드</div>`;
+
+                    const actionText = isChatbot ? '대화하기' : '입장하기';
+                    const descText = s.worldSetting || s.characterInfo || '설명이 없습니다.';
+
+                    card.innerHTML = `
+                        <div class="delete-btn" onclick="deleteScenario(event, '${s._id}')" title="삭제">
+                            <i class="bi bi-trash"></i>
+                        </div>
+                        <div class="edit-btn" onclick="event.stopPropagation(); location.href='/edit/${s._id}';" title="수정">
+                            <i class="bi bi-pencil"></i>
+                        </div>
+                        ${badgeHtml}
+                        <h3>${s.title}</h3>
+                        <p>${descText}</p>
+                        <div class="card-footer">
+                            <span><i class="bi bi-calendar3"></i> ${new Date(s.createdAt).toLocaleDateString()}</span>
+                            <span>${actionText} <i class="bi bi-arrow-right"></i></span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } else {
+                let emptyMsg = "아직 만든 시나리오가 없습니다. <br><br>위의 [새 시나리오 생성] 버튼을 눌러 모험을 시작하세요!";
+                if (currentFilter === 'chatbot') {
+                    emptyMsg = "아직 생성된 인물 챗봇이 없습니다. <br><br>위의 버튼을 눌러 제타 스타일의 캐릭터 챗봇을 만들어 보세요!";
+                } else if (currentFilter === 'trpg') {
+                    emptyMsg = "아직 생성된 TRPG 시나리오가 없습니다.";
+                }
+                grid.innerHTML = `<div id="scenario-list-empty">${emptyMsg}</div>`;
             }
         }
 
@@ -357,7 +484,7 @@
         async function deleteScenario(event, id) {
             event.stopPropagation();
 
-            if (!confirm("정말로 이 시나리오를 삭제하시겠습니까?\n관련 대화 기록이 모두 사라집니다.")) return;
+            if (!confirm("정말로 이 항목을 삭제하시겠습니까?\n관련 대화 기록이 모두 영구 삭제됩니다.")) return;
 
             try {
                 const response = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });

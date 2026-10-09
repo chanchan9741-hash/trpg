@@ -115,6 +115,7 @@ function wrapScenario(id, data) {
         _id: id,
         id: id,
         userId: data.userId,
+        mode: data.mode || 'trpg', // 'trpg' | 'chatbot'
         title: data.title || "",
         worldSetting: data.worldSetting || "",
         characterInfo: data.characterInfo || "",
@@ -144,6 +145,7 @@ function wrapScenario(id, data) {
                 _id: this._id,
                 id: this.id,
                 userId: this.userId,
+                mode: this.mode || 'trpg',
                 title: this.title,
                 worldSetting: this.worldSetting,
                 characterInfo: this.characterInfo,
@@ -174,6 +176,7 @@ function wrapScenario(id, data) {
 function ScenarioModel(data) {
     const defaultData = {
         userId: data.userId,
+        mode: data.mode || 'trpg',
         title: data.title || "",
         worldSetting: data.worldSetting || "",
         characterInfo: data.characterInfo || "",
@@ -205,6 +208,7 @@ function ScenarioModel(data) {
         const firestore = checkDb();
         const plainData = {
             userId: this.userId,
+            mode: this.mode || 'trpg',
             title: this.title,
             worldSetting: this.worldSetting,
             characterInfo: this.characterInfo,
@@ -315,6 +319,7 @@ ScenarioModel.updateDocument = async function(id, scenario) {
     }
     const firestore = checkDb();
     const plainData = {
+        mode: scenario.mode || 'trpg',
         title: scenario.title,
         worldSetting: scenario.worldSetting,
         characterInfo: scenario.characterInfo,

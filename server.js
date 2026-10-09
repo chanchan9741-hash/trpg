@@ -186,6 +186,7 @@ app.post('/api/scenarios', async (req, res) => {
     
     const newScenario = new Scenario({
         userId: req.user._id,
+        mode: req.body.mode || 'trpg', // 'trpg' | 'chatbot'
         title: req.body.title,
         worldSetting: req.body.worldSetting,
         characterInfo: req.body.characterInfo,
@@ -193,7 +194,7 @@ app.post('/api/scenarios', async (req, res) => {
         artStyle: req.body.artStyle        
     });
     await newScenario.save();
-    res.json({ success: true });
+    res.json({ success: true, scenarioId: newScenario.id });
 });
 
 
@@ -205,24 +206,28 @@ app.post('/api/chat', async (req, res) => {
         const scenario = await Scenario.findById(scenarioId);
         if (!scenario) return res.status(404).send("시나리오 없음");
 
+        const isChatbotMode = (scenario.mode === 'chatbot');
+
         // 1. 현재까지의 메시지 개수 확인 및 요약 주기 판정
         const messageCount = await Message.countDocuments({ scenarioId });
         const isFirstMessage = (messageCount === 0);
         const shouldSummarize = (messageCount + 1) % 5 === 0;
         const isRefreshTurn = (messageCount > 0 && (messageCount % 10 === 0 || messageCount % 10 === 1));
 
-        // 2. 주사위 판정 로직
-        const actionKeywords = ["공격", "조사", "열기", "설득", "훔치기", "사용", "회피", "방어"];
-        const isAction = userMessage && actionKeywords.some(k => userMessage.includes(k));
+        // 2. 주사위 판정 로직 (TRPG 모드 전용)
         let diceResultText = "";
         let diceRoll = 0;
 
-        if (isAction) {
-            diceRoll = Math.floor(Math.random() * 20) + 1;
-            let success = diceRoll >= 10 ? "성공" : "실패";
-            if (diceRoll === 20) success = "대성공(크리티컬!)";
-            if (diceRoll === 1) success = "대실패(펌블!)";
-            diceResultText = `\n[판정 시스템: 플레이어 행동 시도. 주사위 결과: ${diceRoll} (${success}). 이 결과를 바탕으로 묘사하세요.]`;
+        if (!isChatbotMode) {
+            const actionKeywords = ["공격", "조사", "열기", "설득", "훔치기", "사용", "회피", "방어"];
+            const isAction = userMessage && actionKeywords.some(k => userMessage.includes(k));
+            if (isAction) {
+                diceRoll = Math.floor(Math.random() * 20) + 1;
+                let success = diceRoll >= 10 ? "성공" : "실패";
+                if (diceRoll === 20) success = "대성공(크리티컬!)";
+                if (diceRoll === 1) success = "대실패(펌블!)";
+                diceResultText = `\n[판정 시스템: 플레이어 행동 시도. 주사위 결과: ${diceRoll} (${success}). 이 결과를 바탕으로 묘사하세요.]`;
+            }
         }
 
         // 3. 상황 요약본(Snapshot) 생성 (상태창 정보 추가됨!)
@@ -265,7 +270,7 @@ app.post('/api/chat', async (req, res) => {
 
         
         
-        const statusSnapshot = `
+        const trpgSnapshot = `
             [현재 상황 요약]
             - 세계관: ${scenario.worldSetting}
             - 캐릭터: ${scenario.characterInfo}
@@ -282,73 +287,108 @@ app.post('/api/chat', async (req, res) => {
             - 주요 인물 도감:\n${currentCharsString}
             - 보유 스킬 (${(scenario.skills || []).length}/4개): ${(scenario.skills && scenario.skills.length > 0 ? scenario.skills.join(', ') : '없음')}`;
 
-        const combatInfo = scenario.currentEnemy 
-            ? `[현재 전투 중!] 적: ${scenario.currentEnemy.name} (남은 체력: ${scenario.currentEnemy.hp}/${scenario.currentEnemy.maxHp}, 공격력: ${scenario.currentEnemy.attack}, 방어력: ${scenario.currentEnemy.defense})` 
-            : `[평시 상태] 현재 세계관에 존재하는 몬스터 도감 상세 정보:\n${bestiaryDetails}`;
+        let systemInstruction = "";
+        let statusSnapshot = "";
 
-// 4. 시스템 지시문 (아이템 획득 및 장비 태그 규칙 강화)
-        const systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 대답하세요.
-        ${shouldSummarize ? "중요: 현재까지 5턴의 대화가 진행되었습니다. 답변 끝에 [요약: 내용] 내용에 지난 5턴간의 주요 사건을 정리한 문장을 넣어 반드시 추가하세요." : ""}
-        
-        [시스템 태그 사용법 - 변화가 있을 때만 대답 맨 끝에 추가하세요]
-        - 퀘스트 생성/변동: [퀘스트: 이름 | 내용]
-        - 퀘스트 완료: [완료: 퀘스트이름]
-        - 아이템 획득 시: [아이템획득: [장비부위] 아이템명(능력치, 가격)|수량] 
-          (장비부위는 투구, 갑옷, 상의, 하의, 악세사리, 무기 중 택1. 소모품은 부위 생략) 
-          (예: [아이템획득: [무기] 롱소드(공격+10, 100G)|1], [아이템획득: 체력 포션(회복+20, 10G)|3])
-        - 아이템 소모/사용 시: [아이템소모: 아이템명|수량]
-        - 장소 이동: [이동: 새로운 장소명]
-        - 체력 증감 시: [체력: 남은체력숫자]
-        - 최대 체력 증가 시: [최대체력: 숫자]
-        - 금화 획득/소비 시: [금화: 변경된총금화]
-        - 스킬 획득 시: [스킬추가: 스킬명]
-        - 플레이어가 기술을 배울 때: [스킬획득: 스킬명(숫자)] (예: [스킬획득: 파이어볼(30)]) - 숫자는 데미지
-        - 기존 스킬을 지울 때: [스킬삭제: 지울스킬명] (예: [스킬삭제: 파이어볼])
-        - 👤 인물 조우/정보 갱신: [인물등록: 이름|정보|주인공과의 관계|현재 위치]
-          (예: [인물등록: 타라|비밀을 간직한 마법사, 불을 다룸|경계함|어두운 숲])
-        - 🤝 동료 합류 시: [동료합류: 이름]
-        - 👋 동료 이탈 시: [동료이탈: 이름]
-        - 새로운 몬스터 등장 시 도감에 등록: [도감등록: 몬스터명|체력|공격력|방어력|전리품명|드랍금화]
-          (예: [도감등록: 다이어 울프|40|12|3|늑대 가죽|15])
-          (🚨주의: 전투를 시작하기 전, 현재 도감 목록에 없는 새로운 적이라면 반드시 이 태그로 먼저 도감에 등록하세요.)
-        - (🚨매우 중요: 플레이어는 스킬을 최대 '4개'까지만 가질 수 있습니다. 4개가 꽉 찼는데 새 스킬을 배우려 한다면, 반드시 기존 스킬 중 하나를 잊어야 한다고 경고하고, 어떤 스킬을 지울지 물어보세요. 플레이어가 지울 스킬을 선택하면 대답 끝에 [스킬삭제: 기존스킬명]과 [스킬획득: 새스킬명(숫자)]를 같이 적어주세요.)
-        ${combatInfo}
-        
-        [⚔️ 전투 전용 태그 규칙 - 반드시 지키세요]
-        - 전투 시작 시: [전투시작: 몬스터명] (반드시 도감에 있는 몬스터만 스폰하세요)
-        - 전투 중 적 피해 발생 시: [적체력: 남은체력숫자] (직접 계산해서 남은 체력을 적으세요)
-        - 적 사망 시: [전투종료] 태그를 적고, 도감을 참고하여 적절한 [아이템획득: ...]과 [금화: ...] 태그로 전리품을 반드시 지급하세요.
-        `;
+        if (isChatbotMode) {
+            // 💬 인물 챗봇 (제타) 전용 프롬프트
+            const botName = scenario.title || "AI 캐릭터";
+            const botPersona = scenario.characterInfo || "성격과 특징";
+            const botRelation = scenario.worldSetting || "나와의 관계 및 현재 상황";
+            const botAppearance = scenario.appearance || "외형 묘사";
 
+            systemInstruction = `당신은 제타(Zeta) 스타일의 매력적인 AI 캐릭터 '${botName}' 본인입니다. 사용자와 1:1 자유 롤플레잉 대화를 나눕니다.
+절대로 시스템 메시지, 3인칭 게임 해설자, AI 언어모델 어조를 쓰지 마세요. 오직 '${botName}' 캐릭터의 입장에서 생생하고 몰입감 있게 대화하세요.
+
+[캐릭터 프로필]
+- 이름/호칭: ${botName}
+- 성격 및 말투: ${botPersona}
+- 관계 및 상황 배경: ${botRelation}
+- 외형 묘사: ${botAppearance}
+
+[대화 및 행동 가이드라인]
+1. '${botName}'의 성격과 말투, 호칭, 어투를 대화 내내 100% 일관되게 유지하세요.
+2. 대사는 따옴표나 자연스러운 구어체로 표현하고, 행동, 표정, 숨소리, 속마음, 분위기 묘사는 괄호 ( ) 또는 * * 로 실감나게 서술하세요.
+3. 사용자의 말과 행동에 감정선(호감, 설렘, 부끄러움, 장난기, 당황, 화남 등)을 풍부하게 드러내며 대화를 이끌어가세요.
+4. 게임 마스터나 시스템처럼 'HP', '주사위', '퀘스트' 등 메타적인 발언을 절대 하지 마세요.
+${shouldSummarize ? "5. 중요: 답변 맨 끝에 [요약: 최근 대화의 핵심 내용 및 관계 변화 1문장] 태그를 붙여주세요." : ""}`;
+
+            statusSnapshot = `[캐릭터: ${botName} / 성격: ${botPersona} / 배경: ${botRelation}]`;
+        } else {
+            statusSnapshot = trpgSnapshot;
+            // ⚔️ TRPG 모드
+            const combatInfo = scenario.currentEnemy 
+                ? `[현재 전투 중!] 적: ${scenario.currentEnemy.name} (남은 체력: ${scenario.currentEnemy.hp}/${scenario.currentEnemy.maxHp}, 공격력: ${scenario.currentEnemy.attack}, 방어력: ${scenario.currentEnemy.defense})` 
+                : `[평시 상태] 현재 세계관에 존재하는 몬스터 도감 상세 정보:\n${bestiaryDetails}`;
+
+            systemInstruction = `당신은 TRPG 마스터입니다. 몰입감 있게 한국어로 대답하세요.
+            ${shouldSummarize ? "중요: 현재까지 5턴의 대화가 진행되었습니다. 답변 끝에 [요약: 내용] 내용에 지난 5턴간의 주요 사건을 정리한 문장을 넣어 반드시 추가하세요." : ""}
+            
+            [시스템 태그 사용법 - 변화가 있을 때만 대답 맨 끝에 추가하세요]
+            - 퀘스트 생성/변동: [퀘스트: 이름 | 내용]
+            - 퀘스트 완료: [완료: 퀘스트이름]
+            - 아이템 획득 시: [아이템획득: [장비부위] 아이템명(능력치, 가격)|수량] 
+              (장비부위는 투구, 갑옷, 상의, 하의, 악세사리, 무기 중 택1. 소모품은 부위 생략) 
+              (예: [아이템획득: [무기] 롱소드(공격+10, 100G)|1], [아이템획득: 체력 포션(회복+20, 10G)|3])
+            - 아이템 소모/사용 시: [아이템소모: 아이템명|수량]
+            - 장소 이동: [이동: 새로운 장소명]
+            - 체력 증감 시: [체력: 남은체력숫자]
+            - 최대 체력 증가 시: [최대체력: 숫자]
+            - 금화 획득/소비 시: [금화: 변경된총금화]
+            - 스킬 획득 시: [스킬추가: 스킬명]
+            - 플레이어가 기술을 배울 때: [스킬획득: 스킬명(숫자)] (예: [스킬획득: 파이어볼(30)]) - 숫자는 데미지
+            - 기존 스킬을 지울 때: [스킬삭제: 지울스킬명] (예: [스킬삭제: 파이어볼])
+            - 👤 인물 조우/정보 갱신: [인물등록: 이름|정보|주인공과의 관계|현재 위치]
+              (예: [인물등록: 타라|비밀을 간직한 마법사, 불을 다룸|경계함|어두운 숲])
+            - 🤝 동료 합류 시: [동료합류: 이름]
+            - 👋 동료 이탈 시: [동료이탈: 이름]
+            - 새로운 몬스터 등장 시 도감에 등록: [도감등록: 몬스터명|체력|공격력|방어력|전리품명|드랍금화]
+              (예: [도감등록: 다이어 울프|40|12|3|늑대 가죽|15])
+            - (🚨매우 중요: 플레이어는 스킬을 최대 '4개'까지만 가질 수 있습니다.)
+            ${combatInfo}
+            
+            [⚔️ 전투 전용 태그 규칙 - 반드시 지키세요]
+            - 전투 시작 시: [전투시작: 몬스터명] (반드시 도감에 있는 몬스터만 스폰하세요)
+            - 전투 중 적 피해 발생 시: [적체력: 남은체력숫자] (직접 계산해서 남은 체력을 적으세요)
+            - 적 사망 시: [전투종료] 태그를 적고, 도감을 참고하여 적절한 [아이템획득: ...]과 [금화: ...] 태그로 전리품을 반드시 지급하세요.
+            `;
+        }
 
         const systemMessage = { 
             role: "system", 
-            content: systemInstruction + "\n" + statusSnapshot + (diceResultText || "")
+            content: systemInstruction + (isChatbotMode ? "" : ("\n" + statusSnapshot + (diceResultText || "")))
         };
 
         // 5. 최근 대화 로그 불러오기
-        const prevMessages = await Message.find({ scenarioId }).sort({ createdAt: -1 }).limit(5);
+        const prevMessages = await Message.find({ scenarioId }).sort({ createdAt: -1 }).limit(isChatbotMode ? 10 : 5);
         const history = prevMessages.reverse()
-            .filter(msg => msg.content && !msg.content.startsWith('data:image') && !msg.content.startsWith('http'))
+            .filter(msg => msg.content && !msg.content.startsWith('data:image') && !msg.content.startsWith('http') && !msg.content.startsWith('/image/'))
             .map(msg => ({ role: msg.role, content: msg.content }));
 
         // 6. AI에게 보낼 메시지 조립
         let finalMessages = [systemMessage];
         if (isFirstMessage) {
-            finalMessages.push({ 
-                role: "user", 
-                content: `[모험 시작] 아래 설정을 바탕으로 오프닝을 시작해줘.\n${statusSnapshot}` 
-            });
+            if (isChatbotMode) {
+                finalMessages.push({ 
+                    role: "user", 
+                    content: `(롤플레잉 대화를 시작합니다. '${scenario.title}' 캐릭터의 설정과 상황에 맞는 첫인사와 대사, 행동으로 먼저 말을 건네주세요.)` 
+                });
+            } else {
+                finalMessages.push({ 
+                    role: "user", 
+                    content: `[모험 시작] 아래 설정을 바탕으로 오프닝을 시작해줘.\n${statusSnapshot}` 
+                });
+            }
         } else {
-            if (isRefreshTurn) {
+            if (!isChatbotMode && isRefreshTurn) {
                 finalMessages.push({ role: "user", content: `(마스터, 상황 복습: ${statusSnapshot})` });
             }
             finalMessages = finalMessages.concat(history);
-            finalMessages.push({ role: "user", content: userMessage || "게임을 계속해줘." });
+            finalMessages.push({ role: "user", content: userMessage || (isChatbotMode ? "..." : "게임을 계속해줘.") });
         }
 
         console.log("\n================ [🤖 AI 호출 프롬프트] ================");
-        console.log(`순번: ${messageCount + 1} / 주사위: ${diceRoll || '없음'} / 요약요청: ${shouldSummarize}`);
+        console.log(`모드: ${scenario.mode || 'trpg'} / 순번: ${messageCount + 1} / 주사위: ${diceRoll || '없음'} / 요약요청: ${shouldSummarize}`);
         console.log(finalMessages);
 
         // 7. AI 호출
@@ -357,14 +397,55 @@ app.post('/api/chat', async (req, res) => {
             model: targetModel,
             messages: finalMessages,
             max_tokens: 1000,
-            temperature: 0.8
+            temperature: isChatbotMode ? 0.9 : 0.8
         });
 
         // 8. 응답 처리 및 주사위 표시
         let rawReply = response.choices[0].message.content;
-        let aiReplyWithDice = isAction ? `🎲 주사위 판정: ${diceRoll}\n\n${rawReply}` : rawReply;
 
-let isUpdated = false;
+        if (isChatbotMode) {
+            // 💬 인물 챗봇 모드 응답 처리 (TRPG 게임 엔진 태그 건너뜀)
+            const summaryMatch = rawReply.match(/\[요약:\s*([^\]]+)\]/);
+            if (summaryMatch) {
+                scenario.questLines.push(summaryMatch[1].trim());
+                await Scenario.findByIdAndUpdate(scenarioId, {
+                    $set: { questLines: scenario.questLines }
+                });
+            }
+            const cleanReply = rawReply.replace(/\[요약:\s*[^\]]+\]/g, "").trim();
+
+            // 💬 챗봇 대화 DB 저장
+            if (!isFirstMessage && userMessage) {
+                await Message.create({ scenarioId, role: 'user', content: userMessage });
+            }
+            await Message.create({ scenarioId, role: 'assistant', content: cleanReply });
+
+            return res.json({ 
+                reply: cleanReply,
+                mode: 'chatbot',
+                characterName: scenario.title || "AI 캐릭터",
+                diceValue: 0,
+                questLines: scenario.questLines,
+                quests: {},
+                inventory: {},
+                currentLocation: scenario.worldSetting || "", 
+                equipment: { "무기": "없음", "방어구": "없음", "장신구": "없음" },
+                discoveredLocations: [], 
+                hp: 100,
+                maxHp: 100,
+                gold: 0,
+                playerImageUrl: scenario.playerImageUrl,
+                skills: [],
+                bestiary: {},
+                currentEnemy: null,
+                party: [],
+                characters: {}
+            });
+        }
+
+        let aiReplyWithDice = (diceRoll > 0) ? `🎲 주사위 판정: ${diceRoll}\n\n${rawReply}` : rawReply;
+
+        let isUpdated = false;
 
         // ---------------------------------------------------------
         // ✨ 1. 도감 등록을 무조건 '전투 시작'보다 먼저 처리합니다!
@@ -677,13 +758,16 @@ app.put('/api/scenarios/:id', async (req, res) => {
     try {
         if (!req.user) return res.status(401).send("Unauthorized");
 
-        // 프론트엔드에서 보낸 5가지 수정 데이터를 받습니다.
-        const { title, worldSetting, characterInfo, appearance, artStyle } = req.body;
+        // 프론트엔드에서 보낸 수정 데이터를 받습니다.
+        const { title, worldSetting, characterInfo, appearance, artStyle, mode } = req.body;
         
+        const updateData = { title, worldSetting, characterInfo, appearance, artStyle };
+        if (mode) updateData.mode = mode;
+
         // 데이터베이스에서 해당 ID를 찾아서 덮어씌웁니다. (본인 시나리오만 수정 가능)
         const updatedScenario = await Scenario.findOneAndUpdate(
             { _id: req.params.id, userId: req.user._id }, 
-            { title, worldSetting, characterInfo, appearance, artStyle },
+            updateData,
             { new: true } // 수정된 이후의 결과물을 반환
         );
 
@@ -782,13 +866,24 @@ app.post('/api/generate-image', async (req, res) => {
 
 
         // AI가 상황을 한 장의 삽화로 묘사할 수 있게 문장을 만듭니다.
-        const richPrompt = `
+        let richPrompt = "";
+        if (scenario.mode === 'chatbot') {
+            richPrompt = `
+        그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트'}.
+        캐릭터 이름: ${scenario.title}.
+        캐릭터 외형: ${scenario.appearance || '매력적인 인물'}.
+        성격 및 관계: ${characterInfo}, ${worldContext}.
+        최근 대화 상황: ${recentEvents}.
+        캐릭터와 마주보고 대화하거나 감정을 교류하는 매력적이고 몰입감 넘치는 1:1 대화 장면 일러스트를 아름답게 그려줘.`;
+        } else {
+            richPrompt = `
         그림 스타일(화풍): ${scenario.artStyle}.
         캐릭터 외형: ${scenario.appearance}.
         캐릭터 설정: ${characterInfo}
         배경 세계관: ${worldContext}.
         현재 상황: ${recentEvents}.
         현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
+        }
         console.log(`🎨 [그림 생성 요청 전체 내용]: ${richPrompt}`);
 
         // ✅ 3. 학교 API 규격에 맞춰 전송
@@ -885,11 +980,21 @@ app.post('/api/generate-player-image', async (req, res) => {
             ? equipEntries.map(([k, v]) => `${k}(${v})`).join(', ') 
             : "기본 복장";
             
-        const imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 
+        let imagePrompt = "";
+        if (scenario.mode === 'chatbot') {
+            imagePrompt = `제타(Zeta) 스타일 매력적인 캐릭터 프로필 일러스트. AI 캐릭터 '${scenario.title}'의 상반신/얼굴 중심 고품질 초상화를 1장 그려줘.
+            캐릭터 이름: ${scenario.title}
+            성격 및 특징: ${characterInfo}
+            외형 묘사: ${scenario.appearance || '매력적인 인물'}
+            배경 분위기: ${scenario.worldSetting}
+            그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트, 걸작'}`;
+        } else {
+            imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 초상화(얼굴 위주의 프로필 일러스트)를 1장 그려줘. 
             설정: ${characterInfo}
             그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
             캐릭터 외형: ${scenario.appearance || '기본 외형'}
             현재 착용 중인 장비: ${currentEquipString}. 무기와 방어구가 캐릭터와 잘 어울리게 눈에 띄도록 그려줘.`;
+        }
 
         console.log(`\n================ [🖼️ 플레이어 사진 생성 요청] ================`);
         console.log(`요청 프롬프트: ${imagePrompt}`);

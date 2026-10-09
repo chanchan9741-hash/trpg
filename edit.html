@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>시나리오 수정 - Gemini TRPG</title>
+    <title>시나리오 수정 - Gemini TRPG & 챗봇</title>
     <script>
         (function () {
             var b = location.protocol === 'file:' ? 'public/' : '/';
@@ -13,17 +13,123 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg-dark-brown); color: var(--text-primary); margin: 0; padding: 2rem 5%; }
-        .container { max-width: 800px; margin: 0 auto; background: var(--surface); padding: 30px; border-radius: 12px; border: 1px solid var(--border); }
-        h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-top: 0; }
-        label { font-weight: bold; margin-top: 15px; display: block; }
-        input, textarea, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary); box-sizing: border-box; }
-        textarea { height: 150px; resize: vertical; }
-        .btn { padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1.1rem; width: 100%; margin-top: 20px; transition: 0.2s; }
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: var(--bg-dark-brown); 
+            color: var(--text-primary); 
+            margin: 0; 
+            padding: 2rem 5%; 
+        }
+        .container { 
+            max-width: 760px; 
+            margin: 0 auto; 
+            background: var(--surface); 
+            padding: 30px; 
+            border-radius: 14px; 
+            border: 1px solid var(--border); 
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        h1 { 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 12px; 
+            margin-top: 0; 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .mode-badge {
+            font-size: 0.85rem;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: normal;
+        }
+        .mode-badge.trpg {
+            background: var(--surface-2);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+        }
+        .mode-badge.chatbot {
+            background: rgba(255, 90, 121, 0.15);
+            color: #FF5A79;
+            border: 1px solid rgba(255, 90, 121, 0.35);
+        }
+        label { 
+            font-weight: 600; 
+            margin-top: 16px; 
+            display: block; 
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+        label i { margin-right: 5px; color: var(--accent-blue-gray); }
+        input, textarea, select { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 6px; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-strong); 
+            background: var(--surface-2); 
+            color: var(--text-primary); 
+            box-sizing: border-box; 
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+        textarea { height: 130px; resize: vertical; }
+        .btn { 
+            padding: 14px 24px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border: none; 
+            font-size: 1.05rem; 
+            width: 100%; 
+            margin-top: 24px; 
+            transition: 0.2s; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
         .btn-primary { background-color: var(--brand); color: white; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--brand); }
-        .btn-primary:hover { opacity: 0.9; transform: translateY(-2px); }
-        .back-btn { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border-strong); padding: 8px 15px; cursor: pointer; margin-bottom: 20px; border-radius: 4px; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--brand); background: var(--surface); }
+        .btn-primary:hover { opacity: 0.92; transform: translateY(-2px); }
+        .back-btn { 
+            background: var(--surface); 
+            color: var(--text-secondary); 
+            border: 1px solid var(--border-strong); 
+            padding: 8px 16px; 
+            cursor: pointer; 
+            margin-bottom: 20px; 
+            border-radius: 6px; 
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .back-btn:hover { color: var(--text-primary); }
+
+        .mode-switch-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .mode-switch-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-strong);
+            background: var(--surface-2);
+            color: var(--text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .mode-switch-btn.active {
+            border-color: var(--brand);
+            background: var(--surface);
+            color: var(--brand);
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -31,51 +137,100 @@
     <button class="back-btn" onclick="location.href='/'"><i class="bi bi-arrow-left"></i> 메인으로 돌아가기</button>
 
     <div class="container">
-        <h1><i class="bi bi-pencil-square"></i> 시나리오 수정</h1>
+        <h1>
+            <span><i class="bi bi-pencil-square"></i> 시나리오 / 챗봇 수정</span>
+            <span id="current-mode-badge" class="mode-badge trpg">⚔️ TRPG 모드</span>
+        </h1>
+
+        <label><i class="bi bi-sliders"></i> 모드 설정</label>
+        <div class="mode-switch-group">
+            <div class="mode-switch-btn active" id="btn-mode-trpg" onclick="setMode('trpg')">
+                <i class="bi bi-shield-shaded"></i> TRPG 모드
+            </div>
+            <div class="mode-switch-btn" id="btn-mode-chatbot" onclick="setMode('chatbot')">
+                <i class="bi bi-chat-heart-fill"></i> 인물 챗봇 (제타) 모드
+            </div>
+        </div>
         
-        <label>시나리오 제목</label>
+        <label id="lbl-title"><i class="bi bi-card-heading"></i> 시나리오 제목</label>
         <input type="text" id="title" required>
 
-        <label>세계관 배경 설정</label>
+        <label id="lbl-world"><i class="bi bi-globe-americas"></i> 세계관 배경 설정</label>
         <textarea id="worldSetting" required></textarea>
 
-        <label>나의 캐릭터 정보 (직업, 성격 등)</label>
+        <label id="lbl-char"><i class="bi bi-person-gear"></i> 나의 캐릭터 정보 (직업, 성격 등)</label>
         <textarea id="characterInfo" required></textarea>
 
-        <label><i class="bi bi-person"></i> 캐릭터 외형 묘사</label>
+        <label id="lbl-appearance"><i class="bi bi-person"></i> 캐릭터 외형 묘사</label>
         <textarea id="appearance" style="height: 100px;"></textarea>
 
         <label><i class="bi bi-palette"></i> 초상화 화풍 (그림 스타일)</label>
         <select id="editArtStyle">
+            <option value="수려한 일본 애니메이션 스타일, 아름다운 색채">수려한 애니메이션 / 웹툰 스타일</option>
             <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
             <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
-            <option value="수려한 일본 애니메이션 스타일, 아름다운 색채">애니메이션 스타일</option>
-            <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화</option>
             <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
+            <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화 스케치</option>
         </select>
 
-        <button class="btn btn-primary" onclick="submitEdit()">수정 완료 및 저장</button>
+        <button class="btn btn-primary" onclick="submitEdit()">
+            <i class="bi bi-check2-circle"></i> 수정 완료 및 저장
+        </button>
     </div>
 
     <script>
-        // 주소창에서 ID 빼오기 (예: /edit/12345 -> 12345)
         const scenarioId = window.location.pathname.split('/').pop();
+        let currentMode = 'trpg';
 
-        // 1. 페이지 켜지자마자 기존 데이터 불러와서 채우기
+        function setMode(mode) {
+            currentMode = mode;
+            const btnTrpg = document.getElementById('btn-mode-trpg');
+            const btnChatbot = document.getElementById('btn-mode-chatbot');
+            const badge = document.getElementById('current-mode-badge');
+            
+            const lblTitle = document.getElementById('lbl-title');
+            const lblWorld = document.getElementById('lbl-world');
+            const lblChar = document.getElementById('lbl-char');
+            const lblAppearance = document.getElementById('lbl-appearance');
+
+            if (mode === 'chatbot') {
+                btnTrpg.classList.remove('active');
+                btnChatbot.classList.add('active');
+                badge.className = 'mode-badge chatbot';
+                badge.innerHTML = '💬 인물 챗봇 모드';
+
+                lblTitle.innerHTML = '<i class="bi bi-chat-heart"></i> 캐릭터 이름 (챗봇 제목)';
+                lblWorld.innerHTML = '<i class="bi bi-compass"></i> 상황 배경 & 나와의 관계';
+                lblChar.innerHTML = '<i class="bi bi-person-gear"></i> 캐릭터 성격 / 말투 / 특징 (봇 설정)';
+                lblAppearance.innerHTML = '<i class="bi bi-person-bounding-box"></i> 캐릭터 외형 묘사 (프로필 일러스트용)';
+            } else {
+                btnChatbot.classList.remove('active');
+                btnTrpg.classList.add('active');
+                badge.className = 'mode-badge trpg';
+                badge.innerHTML = '⚔️ TRPG 모드';
+
+                lblTitle.innerHTML = '<i class="bi bi-card-heading"></i> 시나리오 제목';
+                lblWorld.innerHTML = '<i class="bi bi-globe-americas"></i> 세계관 배경 설정';
+                lblChar.innerHTML = '<i class="bi bi-person-gear"></i> 나의 캐릭터 정보 (직업, 성격 등)';
+                lblAppearance.innerHTML = '<i class="bi bi-person"></i> 캐릭터 외형 묘사';
+            }
+        }
+
+        // 1. 페이지 로드 시 기존 데이터 채우기
         window.onload = async () => {
             try {
-                // (주의) 시나리오 하나 불러오는 API 주소가 맞는지 확인 (보통 /api/scenario/:id 형태)
                 const response = await fetch(`/api/scenario/${scenarioId}`);
                 if (!response.ok) throw new Error("불러오기 실패");
                 
                 const data = await response.json();
                 
-                // 칸에 데이터 채워넣기
+                setMode(data.mode || 'trpg');
+
                 document.getElementById('title').value = data.title || '';
                 document.getElementById('worldSetting').value = data.worldSetting || '';
                 document.getElementById('characterInfo').value = data.characterInfo || '';
                 document.getElementById('appearance').value = data.appearance || '';
-                if(data.artStyle) document.getElementById('editArtStyle').value = data.artStyle;
+                if (data.artStyle) document.getElementById('editArtStyle').value = data.artStyle;
 
             } catch (err) {
                 alert("시나리오 정보를 불러오지 못했습니다.");
@@ -83,9 +238,10 @@
             }
         };
 
-        // 2. 수정한 데이터 서버로 쏴서 저장하기
+        // 2. 수정 데이터 저장
         async function submitEdit() {
             const updatedData = {
+                mode: currentMode,
                 title: document.getElementById('title').value,
                 worldSetting: document.getElementById('worldSetting').value,
                 characterInfo: document.getElementById('characterInfo').value,
@@ -101,8 +257,8 @@
                 });
 
                 if (response.ok) {
-                    alert('시나리오가 성공적으로 수정되었습니다!');
-                    location.href = '/'; // 수정 완료 후 메인 화면으로 복귀
+                    alert('성공적으로 수정 및 저장되었습니다!');
+                    location.href = '/';
                 } else {
                     alert('수정에 실패했습니다.');
                 }

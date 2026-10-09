@@ -3,7 +3,7 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
-    <title>새 시나리오 만들기 - Gemini TRPG</title>
+    <title>새 시나리오 만들기 - Gemini TRPG & 챗봇</title>
     <script>
         (function () {
             var b = location.protocol === 'file:' ? 'public/' : '/';
@@ -13,67 +13,366 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
-        body { background: var(--bg-screen); color: var(--text-primary); font-family: sans-serif; padding: 50px; }
-        .container { max-width: 600px; margin: 0 auto; background: var(--surface); padding: 30px; border-radius: 15px; border: 1px solid var(--border); }
-        input, textarea { width: 100%; padding: 12px; margin: 10px 0; background: var(--surface); border: 1px solid var(--border-strong); color: var(--text-primary); border-radius: 5px; }
-        button { width: 100%; padding: 15px; background: var(--brand); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        label { color: var(--text-secondary); font-size: 0.9rem; }
+        body { 
+            background: var(--bg-dark-brown); 
+            color: var(--text-primary); 
+            font-family: 'Pretendard', sans-serif; 
+            padding: 40px 20px; 
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container { 
+            width: 100%;
+            max-width: 680px; 
+            background: var(--surface); 
+            padding: 32px; 
+            border-radius: 16px; 
+            border: 1px solid var(--border); 
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            box-sizing: border-box;
+        }
+        .back-btn { 
+            align-self: flex-start;
+            max-width: 680px;
+            width: 100%;
+            margin: 0 auto 16px auto;
+            background: transparent; 
+            color: var(--text-secondary); 
+            border: none; 
+            cursor: pointer; 
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0;
+        }
+        .back-btn:hover { color: var(--text-primary); }
+        h2 { 
+            margin-top: 0; 
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            margin-bottom: 24px;
+        }
+
+        /* 🎛️ 모드 선택 카드 그리드 */
+        .mode-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 26px;
+        }
+        .mode-card {
+            background: var(--surface-2);
+            border: 2px solid var(--border-strong);
+            border-radius: 12px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            user-select: none;
+        }
+        .mode-card:hover {
+            border-color: var(--brand);
+            transform: translateY(-2px);
+        }
+        .mode-card.active {
+            border-color: var(--brand);
+            background: var(--surface);
+            box-shadow: 0 4px 16px rgba(255, 68, 50, 0.18);
+        }
+        .mode-badge-check {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: transparent;
+            transition: all 0.2s;
+        }
+        .mode-card.active .mode-badge-check {
+            background: var(--brand);
+            border-color: var(--brand);
+            color: #fff;
+        }
+        .mode-title {
+            font-weight: bold;
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .mode-desc {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label { 
+            display: block;
+            color: var(--text-primary); 
+            font-size: 0.92rem; 
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        label i { margin-right: 4px; color: var(--accent-blue-gray); }
+        .help-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        input, textarea, select { 
+            width: 100%; 
+            padding: 12px 14px; 
+            background: var(--surface-2); 
+            border: 1px solid var(--border-strong); 
+            color: var(--text-primary); 
+            border-radius: 8px; 
+            font-size: 0.95rem;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--brand);
+            background: var(--surface);
+        }
+        textarea { resize: vertical; }
+
+        .submit-btn { 
+            width: 100%; 
+            padding: 16px; 
+            background: var(--brand); 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            font-size: 1.05rem;
+            cursor: pointer; 
+            transition: transform 0.15s, opacity 0.15s;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .submit-btn:hover { 
+            opacity: 0.92;
+            transform: translateY(-2px);
+        }
+        .submit-btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
+    <div style="max-width: 680px; width: 100%;">
+        <button class="back-btn" onclick="location.href='/'">
+            <i class="bi bi-arrow-left"></i> 메인으로 돌아가기
+        </button>
+    </div>
+
     <div class="container">
-        <h2><i class="bi bi-journal-plus"></i> 새 시나리오 생성</h2>
-        <label>시나리오 제목</label>
-        <input type="text" id="title" placeholder="예: 무너진 왕국의 비밀">
+        <h2><i class="bi bi-magic"></i> 새 시나리오 생성</h2>
+        <div class="subtitle" id="page-subtitle">원하는 모드를 선택하고 이야기를 시작해 보세요.</div>
+
+        <!-- 🎛️ 모드 선택 UI -->
+        <label><i class="bi bi-sliders"></i> 모드 선택</label>
+        <div class="mode-selector">
+            <div class="mode-card active" id="mode-card-trpg" onclick="selectMode('trpg')">
+                <div class="mode-badge-check"><i class="bi bi-check-lg"></i></div>
+                <div class="mode-title"><i class="bi bi-shield-shaded"></i> TRPG 모드</div>
+                <p class="mode-desc">주사위 판정, 스탯, 인벤토리, 퀘스트, 몬스터 전투가 함께하는 정통 판타지 모험</p>
+            </div>
+            <div class="mode-card" id="mode-card-chatbot" onclick="selectMode('chatbot')">
+                <div class="mode-badge-check"><i class="bi bi-check-lg"></i></div>
+                <div class="mode-title"><i class="bi bi-chat-heart-fill" style="color: #FF5A79;"></i> 인물 챗봇 (제타)</div>
+                <p class="mode-desc">제타(Zeta) 스타일 1:1 캐릭터 롤플레잉. 주사위 없이 풍부한 감정선과 대화에 몰입</p>
+            </div>
+        </div>
+
+        <!-- 📝 폼 입력 필드 -->
+        <div class="form-group">
+            <label id="lbl-title" for="title"><i class="bi bi-card-heading"></i> 시나리오 제목</label>
+            <input type="text" id="title" placeholder="예: 무너진 왕국의 비밀" required>
+            <div class="help-text" id="help-title">시나리오의 전체 제목을 입력하세요.</div>
+        </div>
         
-        <label>세계관 설정 (AI 마스터의 지침이 됩니다)</label>
-        <textarea id="worldSetting" rows="5" placeholder="시대적 배경, 마법의 유무 등을 적어주세요..."></textarea>
+        <div class="form-group">
+            <label id="lbl-world" for="worldSetting"><i class="bi bi-globe-americas"></i> 세계관 설정</label>
+            <textarea id="worldSetting" rows="4" placeholder="시대적 배경, 마법의 유무, 시작 장소 등을 적어주세요..."></textarea>
+            <div class="help-text" id="help-world">AI 마스터가 이야기의 배경으로 참고합니다.</div>
+        </div>
         
-        <label>나의 캐릭터 정보</label>
-        <textarea id="charInfo" rows="3" placeholder="이름, 직업, 특징 등..."></textarea>
+        <div class="form-group">
+            <label id="lbl-char" for="charInfo"><i class="bi bi-person-badge"></i> 나의 캐릭터 정보</label>
+            <textarea id="charInfo" rows="3" placeholder="이름, 직업, 특징, 출신 등..."></textarea>
+            <div class="help-text" id="help-char">플레이어 캐릭터의 기본 스펙과 개성을 적어주세요.</div>
+        </div>
 
         <div class="form-group">
-    <label for="appearance"><i class="bi bi-person"></i> 캐릭터 외형 묘사</label>
-    <textarea id="appearance" placeholder="예: 은발의 긴 머리, 붉은 눈동자, 낡은 검은색 가죽 갑옷을 입고 있는 날카로운 인상의 전사" required></textarea>
-</div>
+            <label id="lbl-appearance" for="appearance"><i class="bi bi-person"></i> 캐릭터 외형 묘사</label>
+            <textarea id="appearance" rows="3" placeholder="예: 은발의 긴 머리, 붉은 눈동자, 낡은 검은색 가죽 갑옷을 입고 있는 날카로운 인상의 전사" required></textarea>
+            <div class="help-text" id="help-appearance">초상화 일러스트 생성에 반영되는 외모 묘사입니다.</div>
+        </div>
 
-<div class="form-group">
-    <label for="artStyle"><i class="bi bi-palette"></i> 초상화 화풍 (그림 스타일)</label>
-    <select id="artStyle" required>
-        <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
-        <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
-        <option value="수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채">애니메이션 스타일</option>
-        <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화</option>
-        <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
-    </select>
-</div>
+        <div class="form-group">
+            <label for="artStyle"><i class="bi bi-palette"></i> 초상화 화풍 (그림 스타일)</label>
+            <select id="artStyle" required>
+                <option value="수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채">수려한 애니메이션 / 웹툰 스타일</option>
+                <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작" selected>다크 판타지 유화 (Dark Fantasy)</option>
+                <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Cinematic Photo)</option>
+                <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화 (Watercolor)</option>
+                <option value="고전 TRPG 흑백 펜화 스케치 스타일, 잉크 드로잉">클래식 펜화 스케치 (Ink Sketch)</option>
+            </select>
+        </div>
 
-
-        
-        <button onclick="submitScenario()">모험 시작하기</button>
+        <button class="submit-btn" id="submit-btn" onclick="submitScenario()">
+            <i class="bi bi-play-circle-fill"></i> <span id="submit-btn-text">모험 시작하기</span>
+        </button>
     </div>
 
     <script>
+        let currentMode = 'trpg';
+
+        function selectMode(mode) {
+            currentMode = mode;
+            const trpgCard = document.getElementById('mode-card-trpg');
+            const chatbotCard = document.getElementById('mode-card-chatbot');
+            
+            const lblTitle = document.getElementById('lbl-title');
+            const txtTitle = document.getElementById('title');
+            const helpTitle = document.getElementById('help-title');
+
+            const lblWorld = document.getElementById('lbl-world');
+            const txtWorld = document.getElementById('worldSetting');
+            const helpWorld = document.getElementById('help-world');
+
+            const lblChar = document.getElementById('lbl-char');
+            const txtChar = document.getElementById('charInfo');
+            const helpChar = document.getElementById('help-char');
+
+            const lblAppearance = document.getElementById('lbl-appearance');
+            const txtAppearance = document.getElementById('appearance');
+            const helpAppearance = document.getElementById('help-appearance');
+
+            const btnText = document.getElementById('submit-btn-text');
+            const artSelect = document.getElementById('artStyle');
+
+            if (mode === 'chatbot') {
+                trpgCard.classList.remove('active');
+                chatbotCard.classList.add('active');
+
+                lblTitle.innerHTML = '<i class="bi bi-chat-heart"></i> 캐릭터 이름 (챗봇 제목)';
+                txtTitle.placeholder = '예: 차가운 마탑주 엘레나, 소꿉친구 은우, 마왕 카이엔';
+                helpTitle.innerText = '대화할 AI 캐릭터의 이름을 정해주세요.';
+
+                lblWorld.innerHTML = '<i class="bi bi-compass"></i> 상황 배경 & 나와의 관계';
+                txtWorld.placeholder = '나와의 관계, 현재 단둘이 처한 상황이나 만남의 계기를 적어주세요...\n(예: 10년 지기 소꿉친구 사이. 비가 내리는 방 안에서 둘이 마주 앉아 조용히 이야기를 나누고 있는 상황)';
+                helpWorld.innerText = '캐릭터와 플레이어의 관계 및 현재 1:1 대화 상황을 설정합니다.';
+
+                lblChar.innerHTML = '<i class="bi bi-person-gear"></i> 캐릭터 성격 / 말투 / 특징 (봇 설정)';
+                txtChar.placeholder = '성격, 호칭, 말투, 반응 방식 등\n(예: 츤데레 성격. 겉으로는 차갑고 쌀쌀맞게 대하지만 속으로는 나를 깊이 좋아함. 반말을 쓰며 종종 얼굴을 붉힘)';
+                helpChar.innerText = '캐릭터의 생생한 개성과 일관된 말투를 위해 자세히 적을수록 좋습니다.';
+
+                lblAppearance.innerHTML = '<i class="bi bi-person-bounding-box"></i> 캐릭터 외형 묘사 (프로필 일러스트용)';
+                txtAppearance.placeholder = '예: 분홍빛 긴 생머리, 벽안, 교복 차림의 귀엽고 단정한 인상, 살짝 삐진 표정';
+                helpAppearance.innerText = '제타풍 캐릭터 프로필 일러스트 생성 시 사용됩니다.';
+
+                btnText.innerText = '캐릭터 생성 및 대화 시작하기';
+                artSelect.value = '수려한 일본 애니메이션 스타일, 지브리 스튜디오 화풍, 아름다운 색채';
+            } else {
+                chatbotCard.classList.remove('active');
+                trpgCard.classList.add('active');
+
+                lblTitle.innerHTML = '<i class="bi bi-card-heading"></i> 시나리오 제목';
+                txtTitle.placeholder = '예: 무너진 왕국의 비밀, 저주받은 숲의 탐험';
+                helpTitle.innerText = '시나리오의 전체 제목을 입력하세요.';
+
+                lblWorld.innerHTML = '<i class="bi bi-globe-americas"></i> 세계관 설정';
+                txtWorld.placeholder = '시대적 배경, 마법의 유무, 시작 장소 등을 적어주세요...';
+                helpWorld.innerText = 'AI 마스터가 이야기의 배경으로 참고합니다.';
+
+                lblChar.innerHTML = '<i class="bi bi-person-badge"></i> 나의 캐릭터 정보';
+                txtChar.placeholder = '이름, 직업, 특징, 출신 등...';
+                helpChar.innerText = '플레이어 캐릭터의 기본 스펙과 개성을 적어주세요.';
+
+                lblAppearance.innerHTML = '<i class="bi bi-person"></i> 캐릭터 외형 묘사';
+                txtAppearance.placeholder = '예: 은발의 긴 머리, 붉은 눈동자, 낡은 검은색 가죽 갑옷을 입고 있는 날카로운 인상의 전사';
+                helpAppearance.innerText = '초상화 일러스트 생성에 반영되는 외모 묘사입니다.';
+
+                btnText.innerText = '모험 시작하기';
+                artSelect.value = '고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작';
+            }
+        }
+
         async function submitScenario() {
-               const data = {
-                title: document.getElementById('title').value,
+            const titleVal = document.getElementById('title').value.trim();
+            if (!titleVal) {
+                alert(currentMode === 'chatbot' ? "캐릭터 이름을 입력해주세요!" : "시나리오 제목을 입력해주세요!");
+                document.getElementById('title').focus();
+                return;
+            }
+
+            const data = {
+                mode: currentMode,
+                title: titleVal,
                 worldSetting: document.getElementById('worldSetting').value,
                 characterInfo: document.getElementById('charInfo').value,
-                appearance: document.getElementById('appearance').value,  // 👈 처음에 같이 선언!
-                artStyle: document.getElementById('artStyle').value       // 👈 처음에 같이 선언!
+                appearance: document.getElementById('appearance').value,
+                artStyle: document.getElementById('artStyle').value
             };
             
-            const response = await fetch('/api/scenarios', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 생성 중...';
 
-            if (response.ok) {
-                alert("시나리오가 저장되었습니다!");
-                location.href = '/'; // 홈으로 이동
-            } else {
-                alert("저장 실패 (로그인 상태를 확인하세요)");
+            try {
+                const response = await fetch('/api/scenarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(currentMode === 'chatbot' ? "✨ 캐릭터 챗봇이 생성되었습니다!" : "⚔️ 새 모험 시나리오가 저장되었습니다!");
+                    if (result.scenarioId) {
+                        location.href = `/game/${result.scenarioId}`;
+                    } else {
+                        location.href = '/';
+                    }
+                } else {
+                    alert("저장 실패 (로그인 상태를 확인하세요)");
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-play-circle-fill"></i> <span>${currentMode === 'chatbot' ? '캐릭터 생성 및 대화 시작하기' : '모험 시작하기'}</span>`;
+                }
+            } catch (err) {
+                console.error(err);
+                alert("서버 연결에 실패했습니다.");
+                btn.disabled = false;
             }
         }
     </script>

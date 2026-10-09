@@ -231,27 +231,72 @@ function ScenarioModel(data) {
     };
 }
 
-ScenarioModel.find = async function(query) {
-    const firestore = checkDb();
-    let ref = firestore.collection('scenarios');
-    if (query && query.userId) {
-        ref = ref.where('userId', '==', query.userId);
+class FirestoreQuery {
+    constructor(execFn) {
+        this._execFn = execFn;
+        this._sort = null;
+        this._limit = null;
     }
-    const snap = await ref.get();
-    const list = snap.docs.map(doc => wrapScenario(doc.id, doc.data()));
 
-    const result = [...list];
-    result.sort = function(comparator) {
-        if (comparator && comparator.createdAt === -1) {
-            result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        } else if (typeof comparator === 'function') {
-            result.sort(comparator);
+    sort(sortOption) {
+        this._sort = sortOption;
+        return this;
+    }
+
+    limit(n) {
+        this._limit = n;
+        return this;
+    }
+
+    async exec() {
+        let list = await this._execFn();
+        if (!Array.isArray(list)) return list;
+
+        if (this._sort) {
+            if (typeof this._sort === 'object') {
+                const [field, order] = Object.entries(this._sort)[0] || [];
+                if (field) {
+                    list = [...list].sort((a, b) => {
+                        let valA = a[field];
+                        let valB = b[field];
+                        if (valA instanceof Date) valA = valA.getTime();
+                        if (valB instanceof Date) valB = valB.getTime();
+                        if (valA === undefined) return 1;
+                        if (valB === undefined) return -1;
+                        return order === -1 ? (valB > valA ? 1 : (valB < valA ? -1 : 0)) : (valA > valB ? 1 : (valA < valB ? -1 : 0));
+                    });
+                }
+            } else if (typeof this._sort === 'function') {
+                list = [...list].sort(this._sort);
+            }
         }
-        return result;
-    };
-    // 기본 생성일 기준 내림차순 정렬
-    result.sort({ createdAt: -1 });
-    return result;
+
+        if (typeof this._limit === 'number' && this._limit >= 0) {
+            list = list.slice(0, this._limit);
+        }
+
+        return list;
+    }
+
+    then(onFulfilled, onRejected) {
+        return this.exec().then(onFulfilled, onRejected);
+    }
+
+    catch(onRejected) {
+        return this.exec().catch(onRejected);
+    }
+}
+
+ScenarioModel.find = function(query) {
+    return new FirestoreQuery(async () => {
+        const firestore = checkDb();
+        let ref = firestore.collection('scenarios');
+        if (query && query.userId) {
+            ref = ref.where('userId', '==', query.userId);
+        }
+        const snap = await ref.get();
+        return snap.docs.map(doc => wrapScenario(doc.id, doc.data()));
+    });
 };
 
 ScenarioModel.findById = async function(id) {
@@ -345,40 +390,24 @@ ScenarioModel.findOneAndDelete = async function(filter) {
 
 // 4. Message 모델
 const Message = {
-    async find(query) {
-        const firestore = checkDb();
-        let ref = firestore.collection('messages');
-        if (query && query.scenarioId) {
-            ref = ref.where('scenarioId', '==', query.scenarioId);
-        }
-        const snap = await ref.get();
-        const list = snap.docs.map(doc => {
-            const data = doc.data();
-            return {
-                _id: doc.id,
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
-            };
-        });
-
-        const queryResult = [...list];
-        queryResult.sort = function(sortObj) {
-            if (sortObj && sortObj.createdAt === 1) {
-                queryResult.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            } else if (sortObj && sortObj.createdAt === -1) {
-                queryResult.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    find(query) {
+        return new FirestoreQuery(async () => {
+            const firestore = checkDb();
+            let ref = firestore.collection('messages');
+            if (query && query.scenarioId) {
+                ref = ref.where('scenarioId', '==', query.scenarioId);
             }
-            return queryResult;
-        };
-
-        queryResult.limit = function(n) {
-            const limited = queryResult.slice(0, n);
-            limited.reverse = () => [...limited].reverse();
-            return limited;
-        };
-
-        return queryResult;
+            const snap = await ref.get();
+            return snap.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    _id: doc.id,
+                    id: doc.id,
+                    ...data,
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
+                };
+            });
+        });
     },
 
     async countDocuments(query) {

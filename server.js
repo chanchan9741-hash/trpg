@@ -801,6 +801,7 @@ app.post('/api/generate-image', async (req, res) => {
             body: JSON.stringify({
                 "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
                 "prompt": richPrompt, // 👈 배경과 사건이 합쳐진 풍부한 묘사문
+                "size": "1024x1024",
                 "response_format": "url"
             })
         });
@@ -903,7 +904,7 @@ app.post('/api/generate-player-image', async (req, res) => {
             body: JSON.stringify({
                 "model": "gpt-image-2.5-sunburst", // 순천향대 AIHub 최상위 플래그십 이미지 생성 모델
                 "prompt": imagePrompt,
-                
+                "size": "1024x1024",
                 "response_format": "url"
             })
         });

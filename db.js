@@ -454,6 +454,13 @@ const Message = {
 };
 
 // 5. Cloud Image 저장소 (Firestore 청크 분할 저장 - 무료 플랜 영구 보관)
+let sharp = null;
+try {
+    sharp = require('sharp');
+} catch (e) {
+    console.warn("⚠️ [Sharp] 이미지 압축 라이브러리 미지원 환경, 원본으로 저장합니다.");
+}
+
 async function saveCloudImage(base64String, prefix = 'img') {
     if (!base64String || typeof base64String !== 'string') return base64String;
     if (base64String.startsWith('http://') || base64String.startsWith('https://') || (base64String.startsWith('/image/') && !base64String.startsWith('/image/data:'))) {
@@ -473,9 +480,26 @@ async function saveCloudImage(base64String, prefix = 'img') {
             rawData = base64String.split(',')[1] || base64String;
         }
 
-        const buffer = Buffer.from(rawData, 'base64');
+        let buffer = Buffer.from(rawData, 'base64');
+        const origSizeKb = Math.round(buffer.length / 1024);
+
+        // 🚀 [용량 대폭 감축] Sharp를 사용해 768px WebP로 초고효율 압축 (화질 유지, 용량 95% 절감: 2MB -> ~80KB)
+        if (sharp) {
+            try {
+                buffer = await sharp(buffer)
+                    .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
+                    .webp({ quality: 82 })
+                    .toBuffer();
+                ext = 'webp';
+                contentType = 'image/webp';
+            } catch (sharpErr) {
+                console.warn("⚠️ [Sharp] 이미지 압축 실패, 원본 저장 진행:", sharpErr.message);
+            }
+        }
+
+        const newSizeKb = Math.round(buffer.length / 1024);
         const imageId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        const CHUNK_SIZE = 700 * 1024; // 700KB (Firestore 1MB 문서 한도 내 안전 분할)
+        const CHUNK_SIZE = 700 * 1024; // 700KB (압축 후 보통 100KB 미만이므로 1개 청크로 즉시 완료)
         const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
 
         const metaRef = firestore.collection('cloud_images').doc(imageId);
@@ -502,7 +526,7 @@ async function saveCloudImage(base64String, prefix = 'img') {
             fs.writeFileSync(path.join(cacheDir, `${imageId}.${ext}`), buffer);
         } catch (_) {}
 
-        console.log(`☁️ [구글 클라우드 영구 저장 완료] /image/${imageId}.${ext} (${Math.round(buffer.length / 1024)} KB, ${totalChunks} 청크)`);
+        console.log(`☁️ [구글 클라우드 영구 저장 완료] /image/${imageId}.${ext} (압축: ${origSizeKb}KB ➡️ ${newSizeKb}KB, ${totalChunks} 청크)`);
         return `/image/${imageId}.${ext}`;
     } catch (err) {
         console.error("❌ 클라우드 이미지 저장 에러:", err.message);

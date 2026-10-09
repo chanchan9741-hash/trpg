@@ -1133,6 +1133,8 @@ Rules:
 - Never output tags that imply minors (child, loli, shota, school uniform, teen, etc.).
 - If male-oriented anime style (남성향) is indicated: include tags like "moe, bishoujo, galgame style, anime coloring, detailed vibrant eyes, soft light".
 - If female-oriented anime style (여성향/로판) is indicated: include tags like "otome style, romance fantasy, shoujo, delicate lines, elegant, beautiful aesthetic, soft pastel lighting, sparkling details".
+- Exactly ONE character: Always include "solo, 1girl" (or "solo, 1boy" if male). NEVER output multiple characters, clones, or split panels.
+- Single unified outfit: Describe only ONE coherent outfit that the character is currently wearing. Never mix conflicting outfits.
 - Composition & Framing: Always ensure a balanced distance. Use 'cowboy shot', 'medium shot', 'waist up', or 'medium full shot'. NEVER use 'close-up', 'extreme close-up', or cropped/zoomed-in framing. The character's head, hair, full upper torso/outfit, and surrounding background must all be clearly in frame.
 - If the description says or implies the character is a minor, output exactly: REFUSE_MINOR
 - Composition: ${composition}.`
@@ -1162,8 +1164,8 @@ async function requestHordeImage(koreanPrompt, context = 'scene') {
     const tagHit = detectMinorContent(tags);
     if (tagHit) throw minorBlockedError(tagHit);
 
-    const positive = `masterpiece, best quality, amazing quality, very aesthetic, absurdres, ${tags}`;
-    const negative = 'lowres, worst quality, low quality, bad anatomy, bad hands, extra fingers, blurry, jpeg artifacts, watermark, signature, text, child, loli, shota, underage, kid, toddler, close up, extreme close up, macro, cropped, face crop, out of frame, cut off, zoomed in';
+    const positive = `masterpiece, best quality, amazing quality, very aesthetic, absurdres, solo, ${tags}`;
+    const negative = 'lowres, worst quality, low quality, bad anatomy, bad hands, extra fingers, blurry, jpeg artifacts, watermark, signature, text, child, loli, shota, underage, kid, toddler, close up, extreme close up, macro, cropped, face crop, out of frame, cut off, zoomed in, 2girls, 2boys, multiple girls, multiple boys, 2persons, multiple characters, duplicate, clone, twin, split screen, split view, diptych, comparison, comic, panel, side by side, collage';
     const [width, height] = context === 'portrait' ? [832, 1216] : [1216, 832];
     const apiKey = process.env.AI_HORDE_API_KEY || '0000000000';
 
@@ -1337,6 +1339,7 @@ app.post('/api/generate-image', async (req, res) => {
         캐릭터 외형: ${scenario.appearance || '매력적인 인물'}.
         성격 및 관계: ${scenario.characterInfo}, ${scenario.worldSetting}.
         최근 대화 상황: ${recentEvents}.
+        등장 인물: 화면에는 오직 지정된 1명의 캐릭터만 단독(solo)으로 등장해야 하며, 절대로 캐릭터가 2명 복제되거나 좌우 분할 컷, 비포/애프터 비교 구도가 생기지 않도록 단일 컷으로 그려줘.
         구도 및 카메라 거리: 극단적인 얼굴 클로즈업이나 부담스러운 확대를 엄격히 배제하고, 캐릭터와 카메라 사이에 적당한 거리를 둔 자연스러운 미디엄 샷/카우보이 샷 구도. 캐릭터의 상반신 복장과 헤어스타일, 그리고 주변 실내/배경 공간이 시원하게 보이도록 아름다운 1:1 대화 장면 일러스트를 그려줘.`;
         } else {
             richPrompt = `
@@ -1346,6 +1349,7 @@ app.post('/api/generate-image', async (req, res) => {
         배경 세계관: ${scenario.worldSetting || '판타지 세계'}.
         현재 모험 상황: ${recentEvents}.
         ${currentEquipString}.
+        등장 인물: 화면에는 오직 주인공 1명만 단독(solo)으로 등장해야 하며, 복제/분할 컷/2명 등장을 배제한 단일 컷 일러스트.
         구도 및 카메라 거리: 과도한 얼굴 클로즈업 없이, 주인공의 전신 혹은 상반신(카우보이 샷)과 주변 배경이 넓고 웅장하게 펼쳐지는 시네마틱 와이드 미디엄 샷 구도.`;
         }
 
@@ -1428,6 +1432,7 @@ app.post('/api/generate-player-image', async (req, res) => {
             외형 묘사: ${scenario.appearance || '매력적인 인물'}
             배경 분위기: ${scenario.worldSetting}
             그림 스타일(화풍): ${scenario.artStyle || '수려한 일러스트, 걸작'}
+            등장 인물: 화면에는 오직 1명의 캐릭터만 단독(solo)으로 등장 (복제/분할 컷/2명 등장 엄격히 금지, 단일 컷 일러스트).
             구도 및 카메라 거리: 얼굴만 화면에 꽉 차게 확대된 극단적인 클로즈업을 엄격히 배제하고, 머리부터 허리/가슴까지 의상과 헤어스타일, 배경이 여유롭고 조화롭게 모두 담긴 안정적인 상반신(웨이스트 샷 / 카우보이 샷) 프로필 초상화를 1장 그려줘.`;
         } else {
             imagePrompt = `다음 캐릭터 설정을 바탕으로 플레이어 프로필 초상화를 1장 그려줘. 
@@ -1435,6 +1440,7 @@ app.post('/api/generate-player-image', async (req, res) => {
             그림 스타일(화풍): ${scenario.artStyle || '애니메 스타일'}
             캐릭터 외형: ${scenario.appearance || '기본 외형'}
             ${currentEquipString}.
+            등장 인물: 단독(solo) 1인 캐릭터 프로필 일러스트 (복제/분할 컷 금지).
             구도 및 카메라 거리: 얼굴만 확대된 클로즈업을 배제하고, 캐릭터의 머리부터 허리/의상 장비와 배경이 조화롭게 보이는 안정적인 상반신(웨이스트 샷) 구도.`;
         }
 

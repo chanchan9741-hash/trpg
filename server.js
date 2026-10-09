@@ -1073,37 +1073,49 @@ async function rewritePromptSafelyWithAi(originalPrompt, isChatbotMode = true) {
 
 // 🌸 Pollinations.ai 검열 없는 무료 이미지 생성 헬퍼 함수 (크레딧/토큰 소모 0원)
 async function requestPollinationsImage(prompt) {
-    try {
-        console.log(`🌸 [2차 시도: Pollinations 무료 생성 요청]: ${prompt.slice(0, 80)}...`);
-        const seed = Math.floor(Math.random() * 10000000);
-        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=sana&width=1024&height=1024&nologo=true&seed=${seed}`;
-        
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000); // 25초 타임아웃
-        
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
+    const cleanPrompt = prompt.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    console.log(`🌸 [2차 시도: Pollinations 무료 생성 요청]: ${cleanPrompt.slice(0, 80)}...`);
+    
+    // 모델 우선순위: sana (공식 지원 무료 모델) ➡️ flux-anime (대체 모델)
+    for (const model of ['sana', 'flux-anime']) {
+        try {
+            const seed = Math.floor(Math.random() * 10000000);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000); // 25초 타임아웃
+            
+            const res = await fetch('https://image.pollinations.ai/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                body: JSON.stringify({
+                    prompt: cleanPrompt,
+                    model: model,
+                    width: 1024,
+                    height: 1024,
+                    nologo: true,
+                    seed: seed
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
 
-        if (res.ok && res.headers.get('content-type')?.includes('image')) {
-            const arrayBuffer = await res.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            if (buffer.length > 3000) {
-                console.log(`✨ [2차 Pollinations 다운로드 성공!] 크기: ${Math.round(buffer.length / 1024)}KB`);
-                return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            if (res.ok && res.headers.get('content-type')?.includes('image')) {
+                const arrayBuffer = await res.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                if (buffer.length > 3000) {
+                    console.log(`✨ [2차 Pollinations (${model}) 성공!] 크기: ${Math.round(buffer.length / 1024)}KB`);
+                    return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+                }
+            } else {
+                console.warn(`🌸 [Pollinations (${model}) 응답 상태]: ${res.status}`);
             }
-        } else {
-            console.warn(`🌸 [Pollinations 응답 상태]: ${res.status}`);
+        } catch (err) {
+            console.warn(`🌸 [Pollinations (${model}) 요청 에러]: ${err.message}`);
         }
-        return null;
-    } catch (err) {
-        console.warn(`🌸 [Pollinations 요청 실패]: ${err.message}`);
-        return null;
     }
+    return null;
 }
 
 // 🎨 다단계 지능형 이미지 생성 엔진

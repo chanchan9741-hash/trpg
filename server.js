@@ -10,6 +10,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
 const { OpenAI } = require('openai');
 const app = express();
+app.set('trust proxy', 1); // Render 리버스 프록시 신뢰 설정
 
 // 1. 순천향대 AI Hub 설정
 const openai = new OpenAI({
@@ -28,7 +29,11 @@ app.use(express.json());
 app.use(session({
     secret: process.env.SESSION_SECRET || 'trpg_secret',
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: {
+        secure: 'auto',
+        maxAge: 1000 * 60 * 60 * 24 * 7 // 7일 동안 세션 유지
+    }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -70,16 +75,17 @@ app.get('/combat.html', (req, res) => {
 });
 
 // 6. 페이지 라우트
-app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
-app.get('/create', (req, res) => req.user ? res.sendFile(__dirname + '/create.html') : res.redirect('/auth/google'));
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/create', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'create.html')) : res.redirect('/auth/google'));
 // ✅ 시나리오 수정 전용 페이지 접속
 app.get('/edit/:id', (req, res) => {
     // 로그인 안 한 유저는 메인으로 돌려보냄
     if (!req.user) return res.redirect('/');
     // edit.html 파일 전송
-    res.sendFile(__dirname + '/edit.html'); 
+    res.sendFile(path.join(__dirname, 'edit.html')); 
 });
-app.get('/game/:id', (req, res) => req.user ? res.sendFile(__dirname + '/game.html') : res.redirect('/auth/google'));
+app.get('/game/:id', (req, res) => req.user ? res.sendFile(path.join(__dirname, 'game.html')) : res.redirect('/auth/google'));
 
 // 7. API 라우트
 app.get('/api/user', (req, res) => res.json(req.user || null));
@@ -965,8 +971,8 @@ app.post('/api/scenario/:id/bestiary', async (req, res) => {
 
 // 9. 서버 실행
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log("-----------------------------------------");
-    console.log(`서버 실행 중: http://localhost:${PORT}`);
+    console.log(`서버 실행 중: http://0.0.0.0:${PORT}`);
     console.log("-----------------------------------------");
 });

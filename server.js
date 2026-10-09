@@ -990,8 +990,38 @@ function buildSafeCharacterPrompt(scenario, context = 'scene') {
     }
 }
 
-// 🎨 FactChat 이미지 생성 API 호출 (안전 필터 감지 시 캐릭터 외형/세계관 보존 안전 재시도 탑재)
-async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "") {
+// 🤖 안전 정책 감지 시 AI(gpt-5.4-mini)를 통한 지능형 프롬프트 건전화 재작성 함수
+async function rewritePromptSafelyWithAi(originalPrompt, isChatbotMode = true) {
+    try {
+        const client = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            baseURL: "https://factchat-cloud.mindlogic.ai/v1/gateway"
+        });
+
+        const systemInstruction = isChatbotMode
+            ? `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 캐릭터 이름, 머리색, 눈동자, 얼굴 표현, 매력적인 분위기, 화풍, 배경 등 핵심 정체성은 100% 보존하면서, 성적 묘사/과도한 노출/수위 높은 단어(바니, 가슴, 스킨십, 침대 등)만 DALL-E 안전 정책(전체이용가)을 무조건 통과할 수 있는 고급스럽고 세련된 의상(예: 토끼귀 머리띠와 파티 드레스, 세련된 원피스)과 감성적인 1:1 대화 장면으로 자연스럽게 재작성해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`
+            : `너는 이미지 생성 프롬프트 안전 정제 전문가야. 원본 프롬프트에서 주인공 이름, 외형 특징, 화풍, 세계관 배경은 100% 보존하면서, 폭력/유혈/노출 등 DALL-E 안전 정책에 걸릴 만한 표현만 단정한 여행자 복장과 당당한 모험 장면으로 자연스럽게 재작성해줘. 설명 없이 오직 재작성된 프롬프트만 출력해.`;
+
+        const res = await client.chat.completions.create({
+            model: "gpt-5.4-mini",
+            messages: [
+                { role: "system", content: systemInstruction },
+                { role: "user", content: originalPrompt }
+            ],
+            max_tokens: 300,
+            temperature: 0.7
+        });
+
+        const rewritten = res.choices[0] && res.choices[0].message && res.choices[0].message.content;
+        return rewritten ? rewritten.trim() : null;
+    } catch (err) {
+        console.warn("⚠️ [AI 프롬프트 재작성 실패]:", err.message);
+        return null;
+    }
+}
+
+// 🎨 FactChat 이미지 생성 API 호출 (안전 필터 감지 시 AI 재작성 및 안전 보존 재시도 탑재)
+async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "", isChatbotMode = true) {
     const SCH_GATEWAY_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway/images/generate/";
     const sanitized = sanitizeImagePrompt(prompt);
     
@@ -1013,11 +1043,17 @@ async function requestFactChatImage(prompt, apiKey, fallbackPrompt = "") {
 
     let responseText = await response.text();
 
-    // 🚨 안전 필터(content_policy_violation) 감지 시 캐릭터 고유 외형과 세계관을 100% 보존한 안전 프롬프트로 1회 즉시 재시도
+    // 🚨 안전 필터(content_policy_violation) 감지 시: 1순위 AI(gpt-5.4-mini) 지능형 재작성 ➡️ 2순위 정제 템플릿
     if (!response.ok && (responseText.includes("content_policy_violation") || response.status === 400)) {
-        console.warn("⚠️ [안전 필터 정책 감지] 캐릭터의 고유 외형, 화풍, 배경을 보존한 안전 프롬프트로 1회 재시도합니다...");
-        const fallback = fallbackPrompt ? sanitizeImagePrompt(fallbackPrompt) : sanitized;
-        console.log(`🎨 [캐릭터 보존 안전 재시도 전송]:\n${fallback}`);
+        console.warn("⚠️ [안전 필터 정책 감지] AI(gpt-5.4-mini)를 통해 캐릭터를 100% 보존하면서 안전하게 프롬프트를 자동 재작성합니다...");
+        
+        let fallback = await rewritePromptSafelyWithAi(prompt, isChatbotMode);
+        if (fallback) {
+            console.log(`🤖 [AI 지능형 안전 재작성 프롬프트]:\n${fallback}`);
+        } else {
+            fallback = fallbackPrompt ? sanitizeImagePrompt(fallbackPrompt) : sanitized;
+            console.log(`🎨 [기본 안전 템플릿 프롬프트]:\n${fallback}`);
+        }
         
         response = await fetch(SCH_GATEWAY_URL, {
             method: 'POST',
@@ -1079,7 +1115,7 @@ app.post('/api/generate-image', async (req, res) => {
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'scene');
-        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, fallbackPrompt);
+        const { response, responseText } = await requestFactChatImage(richPrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot');
 
         if (!response.ok) {
             logError('장면 삽화 생성 FactChat API 오류 (/api/generate-image)', new Error(`HTTP ${response.status}: ${responseText}`), {
@@ -1166,7 +1202,7 @@ app.post('/api/generate-player-image', async (req, res) => {
         }
 
         const fallbackPrompt = buildSafeCharacterPrompt(scenario, 'portrait');
-        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, fallbackPrompt);
+        const { response, responseText } = await requestFactChatImage(imagePrompt, apiKey, fallbackPrompt, scenario.mode === 'chatbot');
 
         if (!response.ok) {
             logError('초상화 생성 FactChat API 오류 (/api/generate-player-image)', new Error(`HTTP ${response.status}: ${responseText}`), {

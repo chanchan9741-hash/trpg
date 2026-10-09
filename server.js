@@ -2,6 +2,7 @@
 
 
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
@@ -20,6 +21,37 @@ const openai = new OpenAI({
 
 // 2. Firebase Firestore 데이터베이스 및 모델 연동
 const { User, Scenario, Message } = require('./db');
+
+// 3. Base64 이미지를 정적 파일로 저장하여 Firestore 1MB 제한을 방지하는 헬퍼 함수
+function saveBase64Image(base64String, prefix = 'img') {
+    if (!base64String || typeof base64String !== 'string') return base64String;
+    if (base64String.startsWith('http://') || base64String.startsWith('https://') || base64String.startsWith('/image/')) {
+        return base64String;
+    }
+    try {
+        const matches = base64String.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+        let ext = 'png';
+        let data = base64String;
+        if (matches) {
+            ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+            data = matches[2];
+        } else if (base64String.startsWith('data:image')) {
+            data = base64String.split(',')[1] || base64String;
+        }
+        const buffer = Buffer.from(data, 'base64');
+        const filename = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+        const uploadDir = path.join(__dirname, 'public', 'image');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(uploadDir, filename), buffer);
+        console.log(`💾 [이미지 정적 저장] base64 -> /image/${filename} (${Math.round(buffer.length / 1024)} KB)`);
+        return `/image/${filename}`;
+    } catch (err) {
+        console.error("❌ 이미지 파일 저장 에러:", err.message);
+        return base64String;
+    }
+}
 
 // 4. 미들웨어 설정
 app.use(express.json({ limit: '50mb' })); 
@@ -785,14 +817,17 @@ app.post('/api/generate-image', async (req, res) => {
         let extractedImage = (data.data && data.data[0] && (data.data[0].url || data.data[0].b64_json)) || data.url || data.b64_json;
 
         if (extractedImage) {
-            // ✅ [수정] 만약 짧은 http 링크가 아니라면, HTML이 바로 인식할 수 있는 형태로 조립합니다.
+            // ✅ 만약 짧은 http 링크가 아니라면, HTML이 바로 인식할 수 있는 형태로 조립합니다.
             if (!extractedImage.startsWith('http') && !extractedImage.startsWith('data:image')) {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
-            console.log("✅ 이미지 생성 및 데이터 파싱 완료!");
+            // 🚨 Firestore 1MB 제한 방지: base64 이미지를 정적 파일로 저장
+            const savedUrl = saveBase64Image(extractedImage, `scene_${scenarioId}`);
+
+            console.log("✅ 이미지 생성 및 데이터 파싱 완료! 경로:", savedUrl);
             // 프론트엔드로 조립된 데이터를 보냅니다.
-            res.json({ imageUrl: extractedImage });
+            res.json({ imageUrl: savedUrl });
         } else {
             throw new Error("이미지 URL 또는 데이터 추출 실패");
         }
@@ -806,14 +841,16 @@ app.post('/api/generate-image', async (req, res) => {
 // [추가] 생성된 이미지 URL을 DB에 저장하는 API
 app.post('/api/chat/save-image', async (req, res) => {
     try {
-        const { scenarioId, role, content } = req.body;
-        // 채팅 저장과 동일하게 Message 모델을 사용합니다 [cite: 7, 1325]
+        let { scenarioId, role, content } = req.body;
+        if (content && typeof content === 'string' && content.startsWith('data:image')) {
+            content = saveBase64Image(content, `chat_${scenarioId}`);
+        }
         await Message.create({
             scenarioId,
             role: role || 'assistant',
             content: content // 이미지 URL 주소가 들어갑니다
         });
-        res.json({ success: true });
+        res.json({ success: true, url: content });
     } catch (err) {
         console.error("❌ 이미지 저장 실패:", err);
         res.status(500).send("이미지 저장 중 오류 발생");
@@ -883,12 +920,15 @@ app.post('/api/generate-player-image', async (req, res) => {
                 extractedImage = `data:image/png;base64,${extractedImage}`;
             }
 
+            // 🚨 Firestore 1MB 제한 방지: base64 이미지를 정적 파일로 저장
+            const savedUrl = saveBase64Image(extractedImage, `portrait_${scenarioId}`);
+
             // ✅ 5. DB에 저장 및 프론트엔드로 전송
-            scenario.playerImageUrl = extractedImage;
+            scenario.playerImageUrl = savedUrl;
             await scenario.save();
 
-            console.log("✅ 플레이어 초상화 생성 및 저장 완료!");
-            res.json({ playerImageUrl: extractedImage }); // 프론트로 전달
+            console.log("✅ 플레이어 초상화 생성 및 저장 완료! 경로:", savedUrl);
+            res.json({ playerImageUrl: savedUrl }); // 프론트로 전달
         } else {
             throw new Error("이미지 URL 또는 데이터 추출 실패");
         }

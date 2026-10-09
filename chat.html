@@ -620,7 +620,14 @@
                 document.getElementById('char-appearance').innerText = characterData.appearance || "외형 묘사 없음";
 
                 if (characterData.artStyle) {
-                    document.getElementById('header-art-style').innerText = `화풍: ${characterData.artStyle.split(',')[0]}`;
+                    let styleLabel = characterData.artStyle.split(',')[0];
+                    if (characterData.artStyle.includes('남성향')) styleLabel = '남성향 애니';
+                    else if (characterData.artStyle.includes('여성향')) styleLabel = '여성향 애니 (로판)';
+                    else if (characterData.artStyle.includes('유화')) styleLabel = '다크 판타지 유화';
+                    else if (characterData.artStyle.includes('사진') || characterData.artStyle.includes('실사')) styleLabel = '실사 사진';
+                    else if (characterData.artStyle.includes('수채화')) styleLabel = '몽환적 수채화';
+                    else if (characterData.artStyle.includes('펜화')) styleLabel = '클래식 펜화';
+                    document.getElementById('header-art-style').innerText = `화풍: ${styleLabel}`;
                 }
 
                 if (characterData.playerImageUrl) {

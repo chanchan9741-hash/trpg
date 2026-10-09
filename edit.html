@@ -166,7 +166,8 @@
 
         <label><i class="bi bi-palette"></i> 초상화 화풍 (그림 스타일)</label>
         <select id="editArtStyle">
-            <option value="수려한 일본 애니메이션 스타일, 아름다운 색채">수려한 애니메이션 / 웹툰 스타일</option>
+            <option value="화려하고 매혹적인 남성향 미소녀 애니메이션 화풍, 미연시 라노벨 일러스트 스타일, 선명하고 화사한 색감, 모에 화풍, 걸작">남성향 애니메이션 (미소녀 / 라노벨 화풍)</option>
+            <option value="수려하고 우아한 여성향 로맨스 판타지 웹툰 화풍, 순정만화 오토메 게임 일러스트 스타일, 섬세한 선화, 감성적인 빛 연출, 걸작">여성향 애니메이션 (로맨스 판타지 / 순정 화풍)</option>
             <option value="고품질의 다크 판타지 유화 스타일, 세밀한 붓터치, 걸작">다크 판타지 유화</option>
             <option value="고해상도 실사 사진 스타일, 8k 해상도, 시네마틱 조명">실사 사진 (Photo)</option>
             <option value="화려하고 몽환적인 수채화 일러스트 스타일">몽환적인 수채화</option>
@@ -230,7 +231,13 @@
                 document.getElementById('worldSetting').value = data.worldSetting || '';
                 document.getElementById('characterInfo').value = data.characterInfo || '';
                 document.getElementById('appearance').value = data.appearance || '';
-                if (data.artStyle) document.getElementById('editArtStyle').value = data.artStyle;
+                if (data.artStyle) {
+                    const editSelect = document.getElementById('editArtStyle');
+                    editSelect.value = data.artStyle;
+                    if (!editSelect.value && data.artStyle.includes('애니메이션')) {
+                        editSelect.value = "화려하고 매혹적인 남성향 미소녀 애니메이션 화풍, 미연시 라노벨 일러스트 스타일, 선명하고 화사한 색감, 모에 화풍, 걸작";
+                    }
+                }
 
             } catch (err) {
                 alert("시나리오 정보를 불러오지 못했습니다.");

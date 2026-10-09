@@ -1129,9 +1129,10 @@ async function buildHordeTagsWithAi(koreanPrompt, context = 'scene') {
 Rules:
 - Output ONLY comma-separated English tags. No sentences, no explanations, no Korean.
 - Faithfully keep hair, eyes, body type, outfit, expression, pose, setting, mood and the described situation.
-- Do not include the character's name.
 - Every character is an adult: always include "adult" and "mature female" or "mature male" as appropriate.
 - Never output tags that imply minors (child, loli, shota, school uniform, teen, etc.).
+- If male-oriented anime style (남성향) is indicated: include tags like "moe, bishoujo, galgame style, anime coloring, detailed vibrant eyes, soft light".
+- If female-oriented anime style (여성향/로판) is indicated: include tags like "otome style, romance fantasy, shoujo, delicate lines, elegant, beautiful aesthetic, soft pastel lighting, sparkling details".
 - If the description says or implies the character is a minor, output exactly: REFUSE_MINOR
 - Composition: ${composition}.`
             },

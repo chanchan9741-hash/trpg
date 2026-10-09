@@ -567,6 +567,8 @@ async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
         const CHUNK_SIZE = 700 * 1024;
         const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE);
 
+        const returnedUrl = targetScenarioId ? `/image/${targetScenarioId}/${filename}` : `/image/${filename}`;
+
         const metaRef = targetScenarioId
             ? firestore.collection('scenarios').doc(targetScenarioId).collection('images').doc(imageId)
             : firestore.collection('cloud_images').doc(imageId);
@@ -575,6 +577,9 @@ async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
         batch.set(metaRef, {
             scenarioId: targetScenarioId || null,
             filename,
+            url: returnedUrl,
+            viewUrl: `http://localhost:8080${returnedUrl}`,
+            localPath: targetScenarioId ? `public/image/${targetScenarioId}/${filename}` : `public/image/${filename}`,
             contentType,
             ext,
             totalSize: buffer.length,
@@ -598,7 +603,6 @@ async function saveCloudImage(base64String, prefix = 'img', scenarioId = null) {
             fs.writeFileSync(path.join(cacheDir, filename), buffer);
         } catch (_) {}
 
-        const returnedUrl = targetScenarioId ? `/image/${targetScenarioId}/${filename}` : `/image/${filename}`;
         console.log(`☁️ [구글 클라우드 영구 저장 완료] ${returnedUrl} (압축: ${origSizeKb}KB ➡️ ${newSizeKb}KB, ${totalChunks} 청크)`);
         return returnedUrl;
     } catch (err) {

@@ -58,6 +58,12 @@ process.on('unhandledRejection', (reason) => {
     logError('Node.js 비동기 프로미스 거부 (unhandledRejection)', reason);
 });
 
+// 외부 라이브러리(passport, firebase 등)의 무해한 url.parse() 경고 숨김
+process.on('warning', (warning) => {
+    if (warning.name === 'DeprecationWarning' && warning.code === 'DEP0169') return;
+    console.warn(`⚠️ [${warning.name}] ${warning.message}`);
+});
+
 // 3. 구글 클라우드(Firestore) 영구 저장 헬퍼 함수
 async function saveBase64Image(base64String, prefix = 'img') {
     return await saveCloudImage(base64String, prefix);
